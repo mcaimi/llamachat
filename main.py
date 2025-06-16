@@ -29,17 +29,17 @@ if __name__ == "__main__":
     appSettings = Properties(dotenv_value_dict=config_env)
 
     # initialize streamlit session
-    st.session_state.api_base_url = appSettings.api_base_url
-    st.session_state.default_local_api = appSettings.default_local_api
-    st.session_state.default_cloud_api = appSettings.default_cloud_api
-    st.session_state.custom_endpoint = appSettings.custom_endpoint
+    add_to_session_state(st.session_state, "api_base_url", appSettings.api_base_url)
+    add_to_session_state(st.session_state, "default_local_api", appSettings.default_local_api)
+    add_to_session_state(st.session_state, "default_cloud_api", appSettings.default_cloud_api)
+    add_to_session_state(st.session_state, "enable_rag", appSettings.enable_rag)
+    add_to_session_state(st.session_state, "custom_endpoint", appSettings.custom_endpoint)
     add_to_session_state(st.session_state, "messages", appSettings.messages)
-    st.session_state.enable_rag = appSettings.enable_rag
-    st.session_state.system_prompt = appSettings.system_prompt
-    st.session_state.history_dir = appSettings.history_dir
-    st.session_state.latest_history_filename = appSettings.latest_history_filename
-    st.session_state.chromadb_host = appSettings.chromadb_host
-    st.session_state.chromadb_collection = appSettings.chromadb_collection
+    add_to_session_state(st.session_state, "system_prompt", appSettings.system_prompt)
+    add_to_session_state(st.session_state, "latest_history_filename", appSettings.latest_history_filename)
+    add_to_session_state(st.session_state, "chromadb_host", appSettings.chromadb_host)
+    add_to_session_state(st.session_state, "chromadb_collection", appSettings.chromadb_collection)
+    add_to_session_state(st.session_state, "history_dir", appSettings.history_dir)
 
     # build streamlit UI
     st.set_page_config(page_title="🧠 Ollama Chat Pro", layout="centered")
@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     # Sidebar
     with st.sidebar:
-        st.header("🛠 Settings")
+        st.header("🛠 LLM Settings")
 
         endpoint_choice = st.radio("🌐 Select API Endpoint", ["Local", "Cloud", "Custom"])
 
@@ -155,12 +155,15 @@ if __name__ == "__main__":
             response_container = st.empty()
             full_response = ""
 
+            # prepare json payload.
+            chat_payload: dict = {"model": model_name, "messages": st.session_state.messages}
+            chat_payload["options"] = {"temperature": temperature,
+                                       "top_k": top_k,
+                                       "top_p": top_p,
+                                       "repeat_penalty": repeat_penalty}
+
             try:
-                with requests.post(get_chat_endpoint(), json={"model": model_name, "messages": st.session_state.messages,
-                                                                          "stream": True, "options": {"temperature": temperature,
-                                                                                                      "top_k": top_k,
-                                                                                                      "top_p": top_p,
-                                                                                                      "repeat_penalty": repeat_penalty}}, stream=True, timeout=10) as resp:
+                with requests.post(get_chat_endpoint(), json=chat_payload, stream=True, timeout=10) as resp:
                     if resp.status_code != 200:
                         st.error(f"API error: {resp.status_code}")
                     else:
@@ -179,8 +182,9 @@ if __name__ == "__main__":
             except Exception as e:
                 st.error(f"Request failed: {e}")
 
+            # append full response to chat history
             st.session_state.messages.append({"role": "assistant", "content": full_response})
-            print(st.session_state.messages)
 
+            # save latest messages in the last_chat json file on disk
             save_chat_history(st.session_state, st.session_state.latest_history_filename, st.session_state.messages)
 
