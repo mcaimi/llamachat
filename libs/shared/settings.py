@@ -19,6 +19,7 @@ class Properties(object):
             self.config_parameters["messages"] = [{"role": "system", "content": self.config_parameters.get("system_prompt")}]
             self.config_parameters["history_dir"] = dotenv_value_dict.get("HISTORY_DIR", "history")
             self.config_parameters["latest_history_filename"] = dotenv_value_dict.get("LATEST_HISTORY_FILE", "latest_chat.json")
+            self.config_parameters["api_key"] = dotenv_value_dict.get("API_KEY", "unused")
 
             # vector database settings
             self.config_parameters["chromadb_host"] = dotenv_value_dict.get("CHROMADB_HOST", "http://localhost:8000")
