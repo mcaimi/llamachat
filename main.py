@@ -35,7 +35,7 @@ if __name__ == "__main__":
     stSession.add_to_session_state("api_key", None)
     
     # build streamlit UI
-    st.set_page_config(page_title="🧠 RedHat AI Assistant", layout="wide")
+    st.set_page_config(page_title="🧠 RedHat AI Assistant", initial_sidebar_state="collapsed", layout="wide")
     st.html("assets/header.html")
 
     # get the configured api endpoint from session
