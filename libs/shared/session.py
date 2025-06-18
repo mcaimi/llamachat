@@ -34,6 +34,7 @@ class Session(object):
         detected_models = []
         try:
             resp = requests.get(self.models_endpoint(), timeout=timeout)
+
             if resp.status_code == 200:
                 models = [m['name'] for m in resp.json().get('models', [])]
                 if models:
@@ -46,7 +47,3 @@ class Session(object):
     def add_to_session_state(self, key, value) -> None:
         if key not in self.streamlit_session:
             setattr(self.streamlit_session, key, value)
-
-    def setup_session_state(self, parameters: Properties) -> None:
-        for k in parameters.config_parameters.keys():
-            self.add_to_session_state(k, parameters.config_parameters[k])
