@@ -47,3 +47,9 @@ class Session(object):
     def add_to_session_state(self, key, value) -> None:
         if key not in self.streamlit_session:
             setattr(self.streamlit_session, key, value)
+
+    def update_system_prompt(self, new_prompt: str) -> None:
+        self.session_state.system_prompt = new_prompt
+        for i, msg in enumerate(self.session_state.messages):
+            if msg['role'] == 'system':
+                self.session_state.messages[i]['content'] = new_prompt

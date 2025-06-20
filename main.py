@@ -85,8 +85,7 @@ if __name__ == "__main__":
         with st.expander("📜 System Prompt"):
             new_prompt = st.text_area("Update System Prompt", value=stSession.session_state.system_prompt, height=100)
             if st.button("🔄 Apply New Prompt"):
-                stSession.session_state.system_prompt = new_prompt
-                stSession.session_state.messages.insert(0, {"role": "system", "content": new_prompt})
+                stSession.update_system_prompt(new_prompt=new_prompt)
                 st.success("System prompt updated.")
 
         with st.expander("🧪 Model Parameters"):
