@@ -48,6 +48,9 @@ class Session(object):
         if key not in self.streamlit_session:
             setattr(self.streamlit_session, key, value)
 
+    def clear_chat_session(self) -> None:
+        self.session_state.messages = [{"role": "system", "content": self.session_state.system_prompt}]
+
     def update_system_prompt(self, new_prompt: str) -> None:
         self.session_state.system_prompt = new_prompt
         for i, msg in enumerate(self.session_state.messages):

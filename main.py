@@ -55,6 +55,9 @@ if __name__ == "__main__":
     with st.sidebar:
         st.header("🛠 LLM Settings")
 
+        if st.button("Clear Current Chat"):
+            stSession.clear_chat_session()
+
         st.markdown(f"**🔌 Current Endpoint:** `{stSession.session_state.api_base_url}`")
 
         with st.expander("🧠 Model Selection"):
