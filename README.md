@@ -1,5 +1,7 @@
 # LlamaChat
 
+[![Docker Repository on Quay](https://quay.io/repository/marcocaimi/llamachat/status "Docker Repository on Quay")](https://quay.io/repository/marcocaimi/llamachat)
+
 **LlamaChat** is a web application that allows users to chat with Large Language Models (LLMs). It provides flexibility to interact with LLMs either locally (on-prem) using technologies like **vLLM** or **Ollama** or through remote **OpenAI-compatible endpoints**.
 
 With LlamaChat, users can easily chat with powerful LLMs both in private environments (for enhanced privacy and control) and using cloud-based APIs for scalability.
