@@ -4,7 +4,7 @@ import os, json
 try:
     import requests
     from streamlit import warning, session_state
-    from .settings import Properties
+    from .utils import build_header
 except Exception as e:
     raise e
 
@@ -25,18 +25,27 @@ class Session(object):
         return [f for f in os.listdir(self.streamlit_session.history_dir) if f.endswith(".json")]
 
     def models_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/tags"
+        if self.session_state.api_flavor == "ollama":
+            return f"{self.streamlit_session.api_base_url}/tags"
+        else:
+            return f"{self.streamlit_session.api_base_url}/models"
 
     def chat_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/chat"
+        if self.session_state.api_flavor == "ollama":
+            return f"{self.streamlit_session.api_base_url}/chat"
+        else:
+            return f"{self.streamlit_session.api_base_url}/chat/completions"
 
-    def list_ollama_models(self, timeout: int = 10) -> list:
+    def list_models(self, timeout: int = 10) -> list:
         detected_models = []
         try:
-            resp = requests.get(self.models_endpoint(), timeout=timeout)
+            resp = requests.get(self.models_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
 
             if resp.status_code == 200:
-                models = [m['name'] for m in resp.json().get('models', [])]
+                if self.session_state.api_flavor == "ollama":
+                    models = [m['name'] for m in resp.json().get('models', [])]
+                else:
+                    models = [m['id'] for m in resp.json().get('data', [])]
                 if models:
                     detected_models = models
             return detected_models

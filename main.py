@@ -37,6 +37,7 @@ if __name__ == "__main__":
     stSession.add_to_session_state("api_base_url", appSettings.config_parameters.openai.default_local_api)
     stSession.add_to_session_state("fallback_models", ["llama3"])
     stSession.add_to_session_state("custom_endpoint", "")
+    stSession.add_to_session_state("api_flavor", appSettings.config_parameters.api_flavor)
     stSession.add_to_session_state("system_prompt", appSettings.config_parameters.llm.system_prompt)
     stSession.add_to_session_state("history_dir", appSettings.config_parameters.openai.history_dir)
     stSession.add_to_session_state("latest_history_filename", appSettings.config_parameters.openai.latest_history_filename)
@@ -64,15 +65,18 @@ if __name__ == "__main__":
             endpoint_choice = st.radio("🌐 Select API Endpoint", ["Local", "Cloud", "Custom"])
 
             if endpoint_choice == "Local":
+                stSession.session_state.api_flavor = "ollama"
                 stSession.session_state.api_base_url = appSettings.config_parameters.openai.default_local_api
             elif endpoint_choice == "Cloud":
+                stSession.session_state.api_flavor = "openai"
                 stSession.session_state.api_base_url = appSettings.config_parameters.openai.default_cloud_api
             elif endpoint_choice == "Custom":
                 stSession.session_state.custom_endpoint = st.text_input("🔧 Custom Endpoint", value=stSession.session_state.custom_endpoint)
                 if stSession.session_state.custom_endpoint:
-                    stSession.session_state.openai.api_base_url = stSession.session_state.custom_endpoint
+                    stSession.session_state.api_flavor = "openai"
+                    stSession.session_state.api_base_url = stSession.session_state.custom_endpoint
 
-            models = stSession.list_ollama_models()
+            models = stSession.list_models()
             if models:
                 model_name = st.selectbox("🔁 Select Model", models)
             else:
@@ -191,8 +195,8 @@ if __name__ == "__main__":
                                   "stream": True,
                                   "n": n_comp,
                                   "max_tokens": max_tokens,
-                                  "presence_penalty": presence_penalty,
-                                  "repeat_penalty": repeat_penalty}
+                                  "presence_penalty": presence_penalty,}
+                                  #"repeat_penalty": repeat_penalty}
             
             # execute inference on chat endpoint
             try:
@@ -200,18 +204,34 @@ if __name__ == "__main__":
                     if resp.status_code != 200:
                         st.error(f"API error: {resp.status_code}")
                     else:
-                        for line in resp.iter_lines():
-                            if line:
-                                try:
-                                    part = line.decode('utf-8').strip()
-                                    if part.startswith("data: "):
-                                        part = part[6:]
-                                    data = json.loads(part)
-                                    token = data.get("message", {}).get("content", "")
-                                    full_response += token
-                                    response_container.markdown(full_response, unsafe_allow_html=True)
-                                except Exception as e:
-                                    st.warning(f"Error parsing stream: {e}")
+                        if stSession.session_state.api_flavor == "ollama":
+                            for line in resp.iter_lines():
+                                if line:
+                                    try:
+                                        part = line.decode('utf-8').strip()
+                                        if part.startswith("data: "):
+                                            part = part[6:]
+                                        data = json.loads(part)
+                                        token = data.get("message", {}).get("content", "")
+                                        full_response += token
+                                        response_container.markdown(full_response, unsafe_allow_html=True)
+                                    except Exception as e:
+                                        st.warning(f"Error parsing stream: {e}")
+                        else:
+                            for line in resp.iter_lines():
+                                if line:
+                                    try:
+                                        part = line.decode('utf-8').strip()
+                                        if part.startswith("data: "):
+                                            part = part[6:]
+                                        data = json.loads(part)                                  
+                                        token = data.get("choices", [])[0]["delta"].get("content", "")
+                                        full_response += token
+                                        response_container.markdown(full_response, unsafe_allow_html=True)
+                                    except json.JSONDecodeError as je:
+                                        st.warning(f"End of stream")
+                                    except Exception as e:
+                                        st.warning(f"Error parsing stream: {e}")                                       
             except Exception as e:
                 st.error(f"Request failed: {e}")
 
