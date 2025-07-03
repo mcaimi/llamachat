@@ -159,7 +159,7 @@ if __name__ == "__main__":
             else:
                 from libs.rag.embeddings import openai_instance
                 embed_func = openai_instance(base_url=stSession.session_state.api_base_url, model=model_name, api_key=stSession.session_state.api_key)
-            
+
             # build chromadb client
             chromaClient = LlamaIndexChromaRemote(host=stSession.session_state.chromadb_host, port=stSession.session_state.chromadb_port,
                                               collection=collection_name, collection_similarity=appSettings.config_parameters.chromadb.collection_similarity,
@@ -195,9 +195,11 @@ if __name__ == "__main__":
                                   "stream": True,
                                   "n": n_comp,
                                   "max_tokens": max_tokens,
-                                  "presence_penalty": presence_penalty,}
-                                  #"repeat_penalty": repeat_penalty}
-            
+                                  "presence_penalty": presence_penalty}
+
+            if stSession.session_state.api_flavor == "openai":
+                chat_payload["repeat_penalty"] = repeat_penalty
+
             # execute inference on chat endpoint
             try:
                 with requests.post(stSession.chat_endpoint(), headers=build_header(stSession.session_state.api_key), json=chat_payload, stream=True, timeout=appSettings.config_parameters.openai.timeout) as resp:
@@ -224,14 +226,14 @@ if __name__ == "__main__":
                                         part = line.decode('utf-8').strip()
                                         if part.startswith("data: "):
                                             part = part[6:]
-                                        data = json.loads(part)                                  
+                                        data = json.loads(part)
                                         token = data.get("choices", [])[0]["delta"].get("content", "")
                                         full_response += token
                                         response_container.markdown(full_response, unsafe_allow_html=True)
                                     except json.JSONDecodeError as je:
                                         st.warning(f"End of stream")
                                     except Exception as e:
-                                        st.warning(f"Error parsing stream: {e}")                                       
+                                        st.warning(f"Error parsing stream: {e}")
             except Exception as e:
                 st.error(f"Request failed: {e}")
 
