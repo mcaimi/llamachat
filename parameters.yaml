@@ -10,16 +10,17 @@ vectorstore:
   max_objects: 10
   query_mode: "default"
 
-api_flavor: "ollama"
-
 openai:
-  default_local_api: "http://localhost:11434/api"
-  default_cloud_api: "https://your-cloud-instance/api"  # Replace with actual cloud endpoint
+  default_local_api: "http://10.0.1.124:8321"
+  default_cloud_api: "https://your-cloud-instance"  # Replace with actual cloud endpoint
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
   api_key: "your_api_key"
   timeout: 120
+
+safety:
+  shield_model: "meta-llama/Llama-Guard-3-1b"
 
 features:
   enable_rag: False

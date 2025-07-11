@@ -25,27 +25,30 @@ class Session(object):
         return [f for f in os.listdir(self.streamlit_session.history_dir) if f.endswith(".json")]
 
     def models_endpoint(self) -> str:
-        if self.session_state.api_flavor == "ollama":
-            return f"{self.streamlit_session.api_base_url}/tags"
-        else:
-            return f"{self.streamlit_session.api_base_url}/models"
+        return f"{self.streamlit_session.api_base_url}/v1/models"
 
     def chat_endpoint(self) -> str:
-        if self.session_state.api_flavor == "ollama":
-            return f"{self.streamlit_session.api_base_url}/chat"
-        else:
-            return f"{self.streamlit_session.api_base_url}/chat/completions"
+        return f"{self.streamlit_session.api_base_url}/v1/chat/completions"
 
-    def list_models(self, timeout: int = 10) -> list:
+    def shields_endpoint(self) -> str:
+        return f"{self.streamlit_session.api_base_url}/v1/shields"
+
+    def list_models(self, model_type: str = "llm", timeout: int = 10) -> list:
         detected_models = []
+        if model_type not in ["llm", "embedding", "shield"]:
+            return []
+
         try:
-            resp = requests.get(self.models_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
+            if model_type == "shield":
+                resp = requests.get(self.shields_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
+            else:
+                resp = requests.get(self.models_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
 
             if resp.status_code == 200:
-                if self.session_state.api_flavor == "ollama":
-                    models = [m['name'] for m in resp.json().get('models', [])]
+                if model_type == "shield":
+                    models = [m['identifier'] for m in resp.json().get('data', []) if m['type'] == model_type]
                 else:
-                    models = [m['id'] for m in resp.json().get('data', [])]
+                    models = [m['identifier'] for m in resp.json().get('data', []) if m['model_type'] == model_type]
                 if models:
                     detected_models = models
             return detected_models
