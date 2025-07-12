@@ -12,7 +12,6 @@ vectorstore:
 
 openai:
   default_local_api: "http://10.0.1.124:8321"
-  default_cloud_api: "https://your-cloud-instance"  # Replace with actual cloud endpoint
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
@@ -24,6 +23,7 @@ safety:
 
 features:
   enable_rag: False
+  enable_shields: False
 
 llm:
   temperature: 0.8

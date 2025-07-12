@@ -44,6 +44,7 @@ if __name__ == "__main__":
     stSession.add_to_session_state("latest_history_filename", appSettings.config_parameters.openai.latest_history_filename)
     stSession.add_to_session_state("api_key", appSettings.config_parameters.openai.api_key)
     stSession.add_to_session_state("enable_rag", appSettings.config_parameters.features.enable_rag)
+    stSession.add_to_session_state("enable_shields", appSettings.config_parameters.features.enable_shields)
     stSession.add_to_session_state("chromadb_host", appSettings.config_parameters.chromadb.host)
     stSession.add_to_session_state("chromadb_port", appSettings.config_parameters.chromadb.port)
     stSession.add_to_session_state("chromadb_collection", appSettings.config_parameters.chromadb.collection)
@@ -63,17 +64,6 @@ if __name__ == "__main__":
         st.markdown(f"**🔌 Current Endpoint:** `{stSession.session_state.api_base_url}`")
 
         with st.expander("🧠 Model Selection"):
-            endpoint_choice = st.radio("🌐 Select API Endpoint", ["Local", "Cloud", "Custom"])
-
-            if endpoint_choice == "Local":
-                stSession.session_state.api_base_url = appSettings.config_parameters.openai.default_local_api
-            elif endpoint_choice == "Cloud":
-                stSession.session_state.api_base_url = appSettings.config_parameters.openai.default_cloud_api
-            elif endpoint_choice == "Custom":
-                stSession.session_state.custom_endpoint = st.text_input("🔧 Custom Endpoint", value=stSession.session_state.custom_endpoint)
-                if stSession.session_state.custom_endpoint:
-                    stSession.session_state.api_base_url = stSession.session_state.custom_endpoint
-
             models = stSession.list_models(model_type="llm")
             if models:
                 model_name = st.selectbox("🧠 Select Model", models)
@@ -92,9 +82,9 @@ if __name__ == "__main__":
             else:
                 stSession.session_state.api_key = api_key
 
-
         st.markdown("---")
         with st.expander("📜 AI Safety Shields"):
+            stSession.session_state.enable_shields = st.checkbox("🔎 Enable Shields", value=stSession.session_state.enable_shields)
             shield_models = stSession.list_models(model_type="shield")
             if shield_models:
                 shield_name = st.selectbox("🔁 Select Shield Model", shield_models)
@@ -103,7 +93,7 @@ if __name__ == "__main__":
 
         st.markdown("---")
         with st.expander("📜 System Prompt"):
-            new_prompt = st.text_area("Update System Prompt", value=stSession.session_state.system_prompt, height=100)
+            new_prompt = st.text_area("Update System Prompt", value=stSession.session_state.system_prompt, height=150)
             if st.button("🔄 Apply New Prompt"):
                 stSession.update_system_prompt(new_prompt=new_prompt)
                 st.success("System prompt updated.")
@@ -169,33 +159,57 @@ if __name__ == "__main__":
         with st.chat_message("assistant"):
             response_container = st.empty()
             full_response = ""
+            shield_response = ""
 
             # execute inference on chat endpoint
             try:
                 chatClient = LlamaStackClient(base_url=stSession.session_state.api_base_url)
 
-                # if enabled, run safety shield
-                shield_output = chatClient.safety.run_shield(
-                    messages=[{"role": "user", "content": prompt}],
-                    shield_id=shield_name,
-                    params={}
-                )
+                # inference parameters
+                inference_parms = {
+                            "max_tokens": max_tokens,
+                            "n": n_comp,
+                            "top_p": top_p,
+                            "temperature": temperature,
+                            "presence_penalty": presence_penalty,
+                            "frequency_penalty": repeat_penalty
+                        }
 
-                # detect unappropriate prompt
-                if shield_output.violation:
-                    response_container.markdown("**Input Shielding**: {}".format(shield_output))
-                else:
+                # if enabled, run safety shield
+                if stSession.session_state.enable_shields:
+                    shield_output = chatClient.safety.run_shield(
+                        messages=[{"role": "user", "content": prompt}],
+                        shield_id=shield_name,
+                        params={}
+                    )
+
+                    # detect unappropriate prompt
+                    if shield_output.violation:
+                        violation_type = f"Violation Type: {shield_output.violation.metadata.get('violation_type')}"
+                        violation_level = f"Violation Level: {shield_output.violation.violation_level}"
+                        violation_message = f"Message: {shield_output.violation.user_message}"
+                        response_container.markdown(f"**Input Shielding**: {violation_type}, {violation_level} -- {violation_message}")
+                    else:
+                        # perform inference
+                        for line in chatClient.chat.completions.create(messages=stSession.session_state.messages, model=model_name, stream=True, **inference_parms):
+                            for event in line.choices:
+                                token = event.delta.content
+                                full_response += token
+                            response_container.markdown(full_response, unsafe_allow_html=True)
+                else: # no shields
                     # perform inference
-                    for line in chatClient.chat.completions.create(messages=stSession.session_state.messages, model=model_name, stream=True):
+                    for line in chatClient.chat.completions.create(messages=stSession.session_state.messages, model=model_name, stream=True, **inference_parms):
                         for event in line.choices:
                             token = event.delta.content
                             full_response += token
                         response_container.markdown(full_response, unsafe_allow_html=True)
-                    
-                    # append full response to chat history
-                    stSession.session_state.messages.append({"role": "assistant", "content": full_response})
+
             except Exception as e:
                 st.error(f"Request failed: {e}")
+
+            # append full response to chat history
+            stSession.session_state.messages.append({"role": "assistant", "content": full_response})
+            print(stSession.session_state.messages)
 
             # save latest messages in the last_chat json file on disk
             stSession.save_chat_history(stSession.session_state.latest_history_filename, stSession.session_state.messages)
