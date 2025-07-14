@@ -1,25 +1,18 @@
 ---
-chromadb:
-  host: localhost
-  port: 8080
-  collection: "default"
-  collection_similarity: "cosine"
-
 vectorstore:
   score: 0.6
   max_objects: 10
   query_mode: "default"
+  collection: "default"
 
 openai:
   default_local_api: "http://10.0.1.124:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
+  shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
   timeout: 120
-
-safety:
-  shield_model: "meta-llama/Llama-Guard-3-1b"
 
 features:
   enable_rag: False
@@ -28,12 +21,10 @@ features:
 llm:
   temperature: 0.8
   top_p: 0.9
-  seed: 12345678
   max_tokens: 1024
   presence_penalty: 1.1
   repeat_penalty: 1.1
   n_comp: 1
-  num_ctx: 2048
   system_prompt: "You are an helpful assistant tasked to retrieve informations from a knowledge base. You must respond precisely and in no more than four senteces. If you cannot respond please tell that you do not know the answer. Use the following context to answer the question."
   user_prompt: "Question: {question}
                 Context: {context}
