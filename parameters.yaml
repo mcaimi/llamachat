@@ -2,14 +2,17 @@
 vectorstore:
   score: 0.6
   max_objects: 10
+  embedding_dimensions: 384
   query_mode: "default"
   collection: "default"
+  provider: "inline-chromadb"
 
 openai:
   default_local_api: "http://10.0.1.124:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
+  embedding_model: "all-MiniLM-L6-v2"
   shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
   timeout: 120
