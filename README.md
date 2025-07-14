@@ -8,11 +8,12 @@ With LlamaChat, users can easily chat with powerful LLMs both in private environ
 
 ## Features
 
-- **Local Chat**: Interact with LLMs hosted on-premises using **vLLM** or **Ollama**.
-- **Remote Chat**: Connect to OpenAI-compatible endpoints for scalable LLM access.
+- **Unified Chat**: Interact with LLMs hosted on-premises or remotely using **llama-stack**
 - **User-Friendly Interface**: Simple web interface to initiate and maintain conversations with LLMs.
 - **API Key Support**: Securely manage and switch between different API keys (for remote services).
 - **Multiple Models**: Support for multiple LLM models such as GPT-based models, Ollama models, and others.
+- **RAG Support**: Chat with your documents, using a vector database as embeddings backend
+- **Safety Shields**: Add safety guardrails to user prompts
 
 ## Screenshot
 
@@ -24,6 +25,7 @@ With LlamaChat, users can easily chat with powerful LLMs both in private environ
 
 - Python 3.12+
 - Streamlit
-- A local Ollama/vLLM instance or a public OpenAI-Compatible API endpoint.
+- An Ollama/vLLM instance or a public OpenAI-Compatible API endpoint.
+- Llama-Stack instance running on-prem or in the cloud.
 
 
