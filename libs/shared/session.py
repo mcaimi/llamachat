@@ -3,7 +3,9 @@
 import os, json
 try:
     import requests
+    from datetime import datetime
     from streamlit import warning, session_state
+    from llama_stack_client.types import UserMessage, SystemMessage, CompletionMessage
     from .utils import build_header
 except Exception as e:
     raise e
@@ -15,11 +17,44 @@ class Session(object):
 
     def save_chat_history(self, filename, chat_data):
         with open(os.path.join(self.streamlit_session.history_dir, filename), "w") as f:
-            json.dump(chat_data, f, indent=2)
+            json_document = []
+            for item in chat_data:
+                if type(item) == CompletionMessage:
+                    json_document.append({"role": item.role, "content": item.content, "stop_reason": item.stop_reason})
+                else:
+                    json_document.append({"role": item.role, "content": item.content})
+
+            # dump data to json    
+            json.dump(json_document, f, indent=2)
+
+    def export_chat_to_markdown(self, md_filename, chat_data):
+        markdown_output = ""
+        for msg in chat_data:
+            role = msg.role.capitalize()
+            content = msg.content
+            markdown_output += f"### {role}\n\n{content}\n\n"
+            # export to markdown
+            with open(os.path.join(self.session_state.history_dir, md_filename), "w", encoding="utf-8") as f:
+                f.write(markdown_output)
 
     def load_chat_history(self, filename):
+        # rebuild chat history
+        chat_history = []
         with open(os.path.join(self.streamlit_session.history_dir, filename), "r") as f:
-            return json.load(f)
+            json_document = json.load(f)
+            # iterate over messages          
+            for item in json_document:
+                if type(item) == dict and "content" in item:
+                    match item["role"]:
+                        case "system":
+                            chat_history.insert(0, SystemMessage(content=item["content"], role="system"))
+                        case "user":
+                            chat_history.append(UserMessage(content=item["content"], role="user"))
+                        case "assistant":
+                            chat_history.append(CompletionMessage(content=item["content"], role="assistant", stop_reason=item["stop_reason"]))
+
+        # return rebuilt history
+        return chat_history    
 
     def list_saved_histories(self):
         return [f for f in os.listdir(self.streamlit_session.history_dir) if f.endswith(".json")]
@@ -61,10 +96,10 @@ class Session(object):
             setattr(self.streamlit_session, key, value)
 
     def clear_chat_session(self) -> None:
-        self.session_state.messages = [{"role": "system", "content": self.session_state.system_prompt}]
+        self.session_state.messages = [SystemMessage(content=self.session_state.system_prompt, role="system")]
 
     def update_system_prompt(self, new_prompt: str) -> None:
         self.session_state.system_prompt = new_prompt
         for i, msg in enumerate(self.session_state.messages):
-            if msg['role'] == 'system':
-                self.session_state.messages[i]['content'] = new_prompt
+            if type(msg) == SystemMessage:
+                self.session_state.messages[i] = SystemMessage(content=new_prompt, role="system")

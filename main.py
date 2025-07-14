@@ -22,6 +22,7 @@ from libs.shared.utils import build_header
 
 # llama stack
 from llama_stack_client import LlamaStackClient
+from llama_stack_client.types import UserMessage, SystemMessage, CompletionMessage
 
 # MAIN
 if __name__ == "__main__":
@@ -38,6 +39,7 @@ if __name__ == "__main__":
     # setup default values from config file
     stSession.add_to_session_state("api_base_url", appSettings.config_parameters.openai.default_local_api)
     stSession.add_to_session_state("fallback_models", ["granite3.3:2b"])
+    stSession.add_to_session_state("shields_fallback_models", ["meta-llama/Llama-Guard-3-1b"])
     stSession.add_to_session_state("custom_endpoint", "")
     stSession.add_to_session_state("system_prompt", appSettings.config_parameters.llm.system_prompt)
     stSession.add_to_session_state("history_dir", appSettings.config_parameters.openai.history_dir)
@@ -45,10 +47,8 @@ if __name__ == "__main__":
     stSession.add_to_session_state("api_key", appSettings.config_parameters.openai.api_key)
     stSession.add_to_session_state("enable_rag", appSettings.config_parameters.features.enable_rag)
     stSession.add_to_session_state("enable_shields", appSettings.config_parameters.features.enable_shields)
-    stSession.add_to_session_state("chromadb_host", appSettings.config_parameters.chromadb.host)
-    stSession.add_to_session_state("chromadb_port", appSettings.config_parameters.chromadb.port)
-    stSession.add_to_session_state("chromadb_collection", appSettings.config_parameters.chromadb.collection)
-    stSession.add_to_session_state("messages", [{"role":"system", "content": stSession.session_state.system_prompt}])
+    stSession.add_to_session_state("vectorstore_collection", appSettings.config_parameters.vectorstore.collection)
+    stSession.add_to_session_state("messages", [SystemMessage(role="system", content=stSession.session_state.system_prompt)])
 
     # build streamlit UI
     st.set_page_config(page_title="🧠 RedHat AI Assistant", initial_sidebar_state="collapsed", layout="wide")
@@ -127,33 +127,25 @@ if __name__ == "__main__":
                     st.success("Latest chat loaded!")
 
             if st.button("📤 Export to Markdown"):
-                markdown_output = ""
-                for msg in stSession.session_state.messages:
-                    role = msg["role"].capitalize()
-                    content = msg["content"]
-                    markdown_output += f"### {role}\n\n{content}\n\n"
-
                 md_filename = f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-                with open(os.path.join(stSession.session_state.history_dir, md_filename), "w", encoding="utf-8") as f:
-                    f.write(markdown_output)
+                stSession.export_chat_to_markdown(md_filename, stSession.session_state.messages)
                 st.success(f"Exported to {md_filename}")
 
         st.markdown("---")
         with st.expander("📚 RAG Settings"):
             stSession.session_state.enable_rag = st.checkbox("🔎 Enable RAG", value=stSession.session_state.enable_rag)
-            chroma_host = st.text_input("🌐 ChromaDB Host", value=stSession.session_state.chromadb_host)
-            collection_name = st.text_input("📂 ChromaDB Collection", value=stSession.session_state.chromadb_collection)
+            collection_name = st.text_input("📂 ChromaDB Collection", value=stSession.session_state.vectorstore_collection)
 
     # Chat Interface
     for msg in stSession.session_state.messages:
-        if msg["role"] != "system":
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"], unsafe_allow_html=True)
+        if msg.role != "system":
+            with st.chat_message(msg.role):
+                st.markdown(msg.content, unsafe_allow_html=True)
 
     prompt = st.chat_input("💬 Say something...")
     if prompt:
         st.chat_message("user").markdown(prompt)
-        stSession.session_state.messages.append({"role": "user", "content": prompt})
+        stSession.session_state.messages.append(UserMessage(content=prompt, role="user"))
 
         # Assistant reply container
         with st.chat_message("assistant"):
@@ -178,7 +170,7 @@ if __name__ == "__main__":
                 # if enabled, run safety shield
                 if stSession.session_state.enable_shields:
                     shield_output = chatClient.safety.run_shield(
-                        messages=[{"role": "user", "content": prompt}],
+                        messages=[UserMessage(content=prompt, role="user")],
                         shield_id=shield_name,
                         params={}
                     )
@@ -208,8 +200,7 @@ if __name__ == "__main__":
                 st.error(f"Request failed: {e}")
 
             # append full response to chat history
-            stSession.session_state.messages.append({"role": "assistant", "content": full_response})
-            print(stSession.session_state.messages)
+            stSession.session_state.messages.append(CompletionMessage(content=full_response, role="assistant", stop_reason="end_of_message"))
 
             # save latest messages in the last_chat json file on disk
             stSession.save_chat_history(stSession.session_state.latest_history_filename, stSession.session_state.messages)
