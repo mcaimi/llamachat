@@ -40,14 +40,12 @@ if __name__ == "__main__":
     stSession.add_to_session_state("api_base_url", appSettings.config_parameters.openai.default_local_api)
     stSession.add_to_session_state("fallback_models", ["granite3.3:2b"])
     stSession.add_to_session_state("shields_fallback_models", ["meta-llama/Llama-Guard-3-1b"])
-    stSession.add_to_session_state("custom_endpoint", "")
     stSession.add_to_session_state("system_prompt", appSettings.config_parameters.llm.system_prompt)
     stSession.add_to_session_state("history_dir", appSettings.config_parameters.openai.history_dir)
     stSession.add_to_session_state("latest_history_filename", appSettings.config_parameters.openai.latest_history_filename)
     stSession.add_to_session_state("api_key", appSettings.config_parameters.openai.api_key)
     stSession.add_to_session_state("enable_rag", appSettings.config_parameters.features.enable_rag)
     stSession.add_to_session_state("enable_shields", appSettings.config_parameters.features.enable_shields)
-    stSession.add_to_session_state("vectorstore_collection", appSettings.config_parameters.vectorstore.collection)
     stSession.add_to_session_state("messages", [SystemMessage(role="system", content=stSession.session_state.system_prompt)])
 
     # session config
@@ -62,6 +60,7 @@ if __name__ == "__main__":
     stSession.add_to_session_state("repeat_penalty", appSettings.config_parameters.llm.repeat_penalty)
     stSession.add_to_session_state("vector_provider", appSettings.config_parameters.vectorstore.provider)
     stSession.add_to_session_state("collection_name", appSettings.config_parameters.vectorstore.collection)
+    stSession.add_to_session_state("vectorstore_collection", appSettings.config_parameters.vectorstore.collection)
 
     # build streamlit UI
     st.set_page_config(page_title="🧠 RedHat AI Assistant", initial_sidebar_state="collapsed", layout="wide")
