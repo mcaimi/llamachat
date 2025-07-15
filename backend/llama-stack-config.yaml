@@ -27,7 +27,7 @@ providers:
   - provider_id: chroma
     provider_type: inline::chromadb
     config:
-      db_path: ${env.CHROMA_DB_PATH:=~/.llama/distribution/llamachat-backend}/chromadb.db
+      db_path: ${env.CHROMA_DB_PATH:=~/.llama/distributions/llamachat-backend}/chromadb.db
 #      - provider_id: chromadb
 #        provider_type: remote::chromadb
 #        config:
