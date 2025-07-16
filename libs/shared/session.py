@@ -4,14 +4,14 @@ import os, json
 try:
     import requests
     from datetime import datetime
-    from streamlit import warning, session_state
+    from streamlit import warning
     from llama_stack_client.types import UserMessage, SystemMessage, CompletionMessage
     from .utils import build_header
 except Exception as e:
     raise e
 
 class Session(object):
-    def __init__(self):
+    def __init__(self, session_state):
         self.streamlit_session = session_state
         self.session_state = self.streamlit_session
 
