@@ -6,6 +6,7 @@ try:
     from llama_stack_client import RAGDocument, LlamaStackClient
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
+    from libs.shared.session import Session
     import pdfplumber
 except ImportError as e:
     print(f"Caught Exception: {e}")
@@ -17,13 +18,16 @@ config_env: dict = dotenv_values(".env")
 config_filename: str = config_env.get("CONFIG_FILE", "parameters.yaml")
 appSettings = Properties(config_file=config_filename)
 
+# load session
+stSession = Session(st.session_state)
+
 # build streamlit UI
 st.set_page_config(page_title="🧠 Embeddings", initial_sidebar_state="collapsed", layout="wide")
 st.html("assets/embeddings.html")
 
-st.markdown(f"**Embedding Model**: {st.session_state.embedding_model_name}")
-st.markdown(f"**Vector DB Provider**: {st.session_state.provider_name}")
-st.markdown(f"**Vector Collection**: {st.session_state.collection_name}")
+st.markdown(f"**Embedding Model**: {stSession.session_state.embedding_model_name}")
+st.markdown(f"**Vector DB Provider**: {stSession.session_state.provider_name}")
+st.markdown(f"**Vector Collection**: {stSession.session_state.collection_name}")
 
 # file uploader
 uploaded_files = st.file_uploader("Embed a document..", accept_multiple_files=True)
@@ -45,7 +49,7 @@ for i, ufile in enumerate(uploaded_files):
             metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
            
     rag_docs.append(RAGDocument(
-        document_id="rag_document_{i}",
+        document_id=f"rag_document_{i}",
         content=file_contents,
         mime_type=mtype,
         metadata=metadata,
@@ -53,19 +57,19 @@ for i, ufile in enumerate(uploaded_files):
 
 # embed documents!
 if len(rag_docs) > 0:
-    embedClient = LlamaStackClient(base_url=st.session_state.api_base_url)
+    embedClient = LlamaStackClient(base_url=stSession.session_state.api_base_url)
     # create vector db on provider
     embedClient.vector_dbs.register(
-        vector_db_id=st.session_state.collection_name,
-        embedding_model=st.session_state.embedding_model_name,
+        vector_db_id=stSession.session_state.collection_name,
+        embedding_model=stSession.session_state.embedding_model_name,
         embedding_dimension=appSettings.config_parameters.vectorstore.embedding_dimensions,
-        provider_id=st.session_state.provider_name,
+        provider_id=stSession.session_state.provider_name,
     )
-    st.markdown("**Embedding...**")
-    embedClient.tool_runtime.rag_tool.insert(
-        documents=rag_docs,
-        vector_db_id=st.session_state.collection_name,
-        chunk_size_in_tokens=512
-    )
+    with st.spinner("**Embedding...**"):
+        embedClient.tool_runtime.rag_tool.insert(
+            documents=rag_docs,
+            vector_db_id=stSession.session_state.collection_name,
+            chunk_size_in_tokens=appSettings.config_parameters.vectore.chunk_size_in_tokens,
+        )
     st.markdown("**Embedding Done**")
     del embedClient
