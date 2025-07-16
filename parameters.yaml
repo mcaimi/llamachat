@@ -2,10 +2,12 @@
 vectorstore:
   score: 0.6
   max_objects: 10
+  mode: "vector"
   embedding_dimensions: 384
   query_mode: "default"
   collection: "default"
   provider: "inline-chromadb"
+  chunk_size_in_tokens: 512
 
 openai:
   default_local_api: "http://10.0.1.124:8321"
@@ -29,7 +31,3 @@ llm:
   repeat_penalty: 1.1
   n_comp: 1
   system_prompt: "You are an helpful assistant tasked to retrieve informations from a knowledge base. You must respond precisely and in no more than four senteces. If you cannot respond please tell that you do not know the answer. Use the following context to answer the question."
-  user_prompt: "Question: {question}
-                Context: {context}
-
-                Answer: "

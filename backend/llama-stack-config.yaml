@@ -104,8 +104,15 @@ models:
   model_id: ${env.INFERENCE_MODEL:=granite3.3:2b}
   provider_id: ollama-inference
   model_type: llm
+- metadata: {}
+  model_id: ${env.INFERENCE_MODEL:=llama3.2:3b}
+  provider_id: ollama-inference
+  model_type: llm
+- metadata: {}
+  model_id: ${env.INFERENCE_MODEL:=qwen3:8b}
+  provider_id: ollama-inference
 - metadata:
-    embedding_dimension: 384
+  embedding_dimension: ${env.EMBEDDING_SIZE:=384}
   model_id: ${env.EMBEDDING_MODEL:=all-MiniLM-L6-v2}
   provider_id: sentence-transformers
   model_type: embedding
