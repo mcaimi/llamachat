@@ -15,16 +15,37 @@ try:
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
+# local imports
+from libs.shared.settings import Properties
+
+# load environment
+config_env: dict = dotenv_values(".env")
+
+# load app settings
+config_filename: str = config_env.get("CONFIG_FILE", "parameters.yaml")
+appSettings = Properties(config_file=config_filename)
+
 # MAIN
 if __name__ == "__main__":
+    # nice logo
+    with st.sidebar:
+        if os.path.exists("assets/llama.png"):
+            st.image("assets/llama.png", use_container_width=False, width=200)
+        else:
+            st.warning("⚠️ 'assets/llama.png' not found. Make sure it's in the correct directory.")
+
     # define app pages
-    ai_chat_page = st.Page("pages/ai_chat.py", title="AI Chat with RAG", icon=":material/chat:")
-    agentic_page = st.Page("pages/agentic_chat.py", title="Agentic AI Chat", icon=":material/chat:")
-    embeddings_page = st.Page("pages/embeddings.py", title="Manage Embeddings", icon=":material/search:")
-    settings_page = st.Page("pages/settings.py", title="Application Settings", icon=":material/settings:")
+    if appSettings.config_parameters.interface.agentic:
+        agentic_page = st.Page("pages/agentic_chat.py", title="Agentic AI Chat", icon=":material/chat:")
+        embeddings_page = st.Page("pages/embeddings.py", title="Manage Embeddings", icon=":material/search:")
+        enabled_sections = [agentic_page, embeddings_page]
+    else:
+        ai_chat_page = st.Page("pages/ai_chat.py", title="AI Chat with RAG", icon=":material/chat:")
+        settings_page = st.Page("pages/settings.py", title="Application Settings", icon=":material/settings:")
+        enabled_sections = [ai_chat_page, settings_page]
 
     # setup application main page
-    pg = st.navigation([ai_chat_page, agentic_page, embeddings_page, settings_page])
+    pg = st.navigation(enabled_sections)
     st.set_page_config(page_title="Red Hat Opensource AI", page_icon=":material/edit:")
 
     # run app

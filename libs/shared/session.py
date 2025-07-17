@@ -114,6 +114,10 @@ class Session(object):
         if key not in self.streamlit_session:
             setattr(self.streamlit_session, key, value)
 
+    def remove_from_session_state(self, key) -> None:
+        if key in self.streamlit_session:
+            del self.streamlit_session[key]
+
     def clear_chat_session(self) -> None:
         self.session_state.messages = [SystemMessage(content=self.session_state.system_prompt, role="system")]
 
