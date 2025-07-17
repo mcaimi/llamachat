@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-# LLM FRONTEND APP
-# Streamlit version
+# Chat with an AI. Optionally support direct RAG techniques to enrich the answer
+# Streamlit version, llamastack backend
 #
 
 import os
@@ -169,8 +169,10 @@ if prompt:
                     prompt_context = rag_response.content
                     st.write("Update Query Prompt...")
                     extended_prompt = f"Please answer the given query using the context below. Only use the information contained in the context. \n\nCONTEXT:\n{prompt_context}\n\nQUERY:\n{prompt}\n"
-                    stSession.session_state.messages.append(UserMessage(content=extended_prompt, role="user"))
-                    rag_status.update(label='RAG Complete!', state="complete")
+                    
+                    # create a new message for rag-enhanced inference
+                    rag_message = UserMessage(content=extended_prompt, role="user")
+                    rag_status.update(label='RAG Phase Complete!', state="complete")
             else:
                 stSession.session_state.messages.append(UserMessage(content=prompt, role="user"))
 
@@ -191,7 +193,11 @@ if prompt:
                     response_container.markdown(f"**Input Shielding**: {violation_type}, {violation_level} -- {violation_message}")
                 else:
                     # perform inference
-                    for chunk in chatClient.inference.chat_completion(messages=stSession.session_state.messages,
+                    if stSession.session_state.enable_rag and rag_message:
+                        query = stSession.session_state.messages + [rag_message]
+                    else:
+                        query = stSession.session_state.messages
+                    for chunk in chatClient.inference.chat_completion(messages=query,
                                                                     model_id=stSession.session_state.model_name,
                                                                     stream=True,
                                                                     sampling_params=inference_parms):
@@ -210,7 +216,11 @@ if prompt:
                         response_container.markdown(f"{full_response}", unsafe_allow_html=True)
             else: # no shields
                 # perform inference
-                for chunk in chatClient.inference.chat_completion(messages=stSession.session_state.messages,
+                if stSession.session_state.enable_rag and rag_message:
+                    query = stSession.session_state.messages + [rag_message]
+                else:
+                    query = stSession.session_state.messages
+                for chunk in chatClient.inference.chat_completion(messages=query,
                                                                  model_id=stSession.session_state.model_name,
                                                                  stream=True,
                                                                  sampling_params=inference_parms):
@@ -233,6 +243,9 @@ if prompt:
             st.error(f"Request failed: {e}")
 
         # append full response to chat history
+        if stSession.session_state.enable_rag:
+            # append original request without full context in the prompt
+            stSession.session_state.messages.append(UserMessage(content=prompt, role="user"))
         stSession.session_state.messages.append(CompletionMessage(content=full_response, role="assistant", stop_reason="end_of_message"))
 
         # save latest messages in the last_chat json file on disk
