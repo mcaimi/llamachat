@@ -71,26 +71,27 @@ if uploaded_files:
     if st.button("Embed Documents...."):
         # documents to embed:
         rag_docs = []
-        for i, ufile in enumerate(uploaded_files):
-            mtype = mt.guess_type(ufile.name)[0]
-            match mtype:
-                case "application/pdf":
-                    with pdfplumber.open(ufile) as pdf:
-                        file_contents = ''
-                        for page in pdf.pages:
-                            file_contents += page.extract_text()
+        with st.spinner("**Chunking...**"):
+            for i, ufile in enumerate(uploaded_files):
+                mtype = mt.guess_type(ufile.name)[0]
+                match mtype:
+                    case "application/pdf":
+                        with pdfplumber.open(ufile) as pdf:
+                            file_contents = ''
+                            for page in pdf.pages:
+                                file_contents += page.extract_text()
 
-                    metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                case "text/plain":
-                    file_contents = ufile.read().decode("utf-8")
-                    metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                
-            rag_docs.append(RAGDocument(
-                document_id=f"rag_document_{i}",
-                content=file_contents,
-                mime_type=mtype,
-                metadata=metadata,
-            ))
+                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
+                    case "text/plain":
+                        file_contents = ufile.read().decode("utf-8")
+                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
+                    
+                rag_docs.append(RAGDocument(
+                    document_id=f"rag_document_{i}",
+                    content=file_contents,
+                    mime_type=mtype,
+                    metadata=metadata,
+                ))
 
         # embed documents!
         if isinstance(vector_db_name, list):
@@ -112,6 +113,7 @@ if uploaded_files:
                     documents=rag_docs,
                     vector_db_id=vector_db_id,
                     chunk_size_in_tokens=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
+                    timeout=appSettings.config_parameters.vectorstore.embedding_timeout,
                 )
             
             st.markdown("**Embedding Done**")

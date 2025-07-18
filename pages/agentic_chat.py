@@ -23,6 +23,8 @@ from libs.shared.utils import build_header
 
 # llama stack
 from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
+from llama_stack_client.lib.agents.react.agent import ReActAgent
+from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
 from llama_stack_client.types import UserMessage, SystemMessage, CompletionMessage
 from llama_stack_client.types.shared.content_delta import TextDelta, ToolCallDelta
 
@@ -73,13 +75,22 @@ with st.sidebar:
 
     st.header("🛠 LLM Control Panel")
 
-    model_list = stSession.list_models(model_type="llm")
-    stSession.session_state.model_name = st.selectbox(label="Available models", options=model_list, on_change=reset_agent)
-    embedding_model_list = stSession.list_models(model_type="embedding")
-    stSession.session_state.embedding_model_name = st.selectbox(label="Available embedding models", options=embedding_model_list, on_change=reset_agent)
+    with st.expander("🛠 Settings"):
+        model_list = stSession.list_models(model_type="llm")
+        stSession.session_state.model_name = st.selectbox(label="Available models", options=model_list, on_change=reset_agent)
+        embedding_model_list = stSession.list_models(model_type="embedding")
+        stSession.session_state.embedding_model_name = st.selectbox(label="Available embedding models", options=embedding_model_list, on_change=reset_agent)
 
-    if st.button("Clear Current Chat"):
-        stSession.session_state.agent_messages = []
+        # select operation mode
+        agentic_mode = st.radio("Select Agentic Mode", ["**LlamaStack Agentic**", "**ReAct**"],
+                                captions=["Use LlamaStack Agentic Framework", "Use Reasoning Model to Improve Tool Calling"],
+                                on_change=reset_agent)
+
+        match agentic_mode:
+            case "**LlamaStack Agentic**":
+                agent_mode = "agentic"
+            case "**ReAct**":
+                agent_mode = "react"
 
     with st.expander("System Prompt"):
         new_prompt = st.text_area("Update System Prompt", value=stSession.session_state.system_prompt, height=150, on_change=reset_agent,)
@@ -99,116 +110,121 @@ with st.sidebar:
     st.markdown(f"**🔌 Current Endpoint:** `{stSession.session_state.api_base_url}`")
     st.markdown(f"**🔌 Current Model:** `{stSession.session_state.model_name}`")
     st.markdown(f"**🔌 Current Embedding Model:** `{stSession.session_state.embedding_model_name}`")
+    st.markdown(f"**🔌 Current Mode:** `{agent_mode}`")
 
-    st.markdown("---")
-    st.markdown("**🔌 Agentic Workflow Capabilities**")
-    tool_groups = chatClient.toolgroups.list()
-    tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
-    mcp_tools_list = [tool for tool in tool_groups_list if tool.startswith("mcp::")]
-    builtin_tools_list = [tool for tool in tool_groups_list if not tool.startswith("mcp::")]
+    if st.button("Clear Current Chat"):
+        stSession.session_state.agent_messages = []
 
-    # MCP Servers comes first now
-    mcp_label_map = {
-        "mcp::sql": "SQL Interface",
-        "mcp::pdf": "Document generator",
-        "mcp::slack": "Slack integration",
-        "mcp::telegram": "Telegram Integration",
-    }
-    mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
-    mcp_label_to_tool = {mcp_label_map.get(k, k): k for k in mcp_tools_list}
+    st.divider()
+    with st.expander("🛠 Agentic"):
+        st.markdown("**🔌 Agentic Workflow Capabilities**")
+        tool_groups = chatClient.toolgroups.list()
+        tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
+        mcp_tools_list = [tool for tool in tool_groups_list if tool.startswith("mcp::")]
+        builtin_tools_list = [tool for tool in tool_groups_list if not tool.startswith("mcp::")]
 
-    st.subheader("MCP Servers")
-    mcp_display_selection = st.pills(
-        label="Registered APIs",
-        options=mcp_display_options,
-        selection_mode="multi",
-        default=mcp_display_options,
-        on_change=reset_agent,
-    )
-    mcp_selection = [mcp_label_to_tool[label] for label in mcp_display_selection]
+        # MCP Servers comes first now
+        mcp_label_map = {
+            "mcp::sql": "SQL Interface",
+            "mcp::pdf": "Document generator",
+            "mcp::slack": "Slack integration",
+            "mcp::telegram": "Telegram Integration",
+        }
+        mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
+        mcp_label_to_tool = {mcp_label_map.get(k, k): k for k in mcp_tools_list}
 
-    # Builtin Tools
-    builtin_label_map = {
-        "builtin::websearch": "Web search",
-        "builtin::rag": "Retrieval augmented generation",
-        "builtin::code_interpreter": "Code generator",
-        "builtin::wolfram_alpha": "Wolfram Alpha",
-    }
-    blt_display_options = [builtin_label_map.get(tool, tool) for tool in builtin_tools_list]
-    blt_label_to_tool = {builtin_label_map.get(k, k): k for k in builtin_tools_list}
-
-    st.subheader("Builtin Tools")
-    blt_display_selection = st.pills(
-        label="Registered APIs",
-        options=blt_display_options,
-        selection_mode="multi",
-        on_change=reset_agent,
-    )
-    toolgroup_selection = [blt_label_to_tool[label] for label in blt_display_selection]
-
-    # if rag is selected, also get a list of all collections in the database
-    if "builtin::rag" in toolgroup_selection:
-        vector_dbs = chatClient.vector_dbs.list() or []
-        if not vector_dbs:
-            st.info("No vector databases available for selection.")
-        else:
-            vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
-            selected_vector_dbs = st.multiselect(
-                label="Select Document Collections to use in RAG queries",
-                options=vector_dbs,
-                on_change=reset_agent,
-            )
-
-    # add arguments to tools that need them
-    for i, tool_name in enumerate(toolgroup_selection):
-        match tool_name:
-            case "builtin::rag":
-                tool_dict = dict(
-                    name="builtin::rag",
-                    args={
-                        "vector_db_ids": list(selected_vector_dbs),
-                    },
-                )
-                toolgroup_selection[i] = tool_dict
-
-    # Final combined selection
-    toolgroup_selection.extend(mcp_selection)
-
-    # display active tools
-    active_tool_list = []
-    for toolgroup_id in toolgroup_selection:
-        active_tool_list.extend(
-            [
-                f"{''.join(toolgroup_id)}:{t.identifier}"
-                for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
-            ]
+        st.subheader("MCP Servers")
+        mcp_display_selection = st.pills(
+            label="Registered APIs",
+            options=mcp_display_options,
+            selection_mode="multi",
+            default=mcp_display_options,
+            on_change=reset_agent,
         )
-    with st.expander("🛠 AI Tool Info...", expanded=False):
-        st.subheader(f"Active Tools: {len(active_tool_list)}")
-        st.json(active_tool_list)
+        mcp_selection = [mcp_label_to_tool[label] for label in mcp_display_selection]
 
-    st.markdown("---")
+        # Builtin Tools
+        builtin_label_map = {
+            "builtin::websearch": "Web search",
+            "builtin::rag": "Retrieval augmented generation",
+            "builtin::code_interpreter": "Code generator",
+            "builtin::wolfram_alpha": "Wolfram Alpha",
+        }
+        blt_display_options = [builtin_label_map.get(tool, tool) for tool in builtin_tools_list]
+        blt_label_to_tool = {builtin_label_map.get(k, k): k for k in builtin_tools_list}
+
+        st.subheader("Builtin Tools")
+        blt_display_selection = st.pills(
+            label="Registered APIs",
+            options=blt_display_options,
+            selection_mode="multi",
+            on_change=reset_agent,
+        )
+        toolgroup_selection = [blt_label_to_tool[label] for label in blt_display_selection]
+
+        # if rag is selected, also get a list of all collections in the database
+        if "builtin::rag" in toolgroup_selection:
+            vector_dbs = chatClient.vector_dbs.list() or []
+            if not vector_dbs:
+                st.info("No vector databases available for selection.")
+            else:
+                vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+                selected_vector_dbs = st.multiselect(
+                    label="Select Document Collections to use in RAG queries",
+                    options=vector_dbs,
+                    on_change=reset_agent,
+                )
+
+        # add arguments to tools that need them
+        for i, tool_name in enumerate(toolgroup_selection):
+            match tool_name:
+                case "builtin::rag":
+                    tool_dict = dict(
+                        name="builtin::rag",
+                        args={
+                            "vector_db_ids": list(selected_vector_dbs),
+                        },
+                    )
+                    toolgroup_selection[i] = tool_dict
+
+        # Final combined selection
+        toolgroup_selection.extend(mcp_selection)
+
+        # display active tools
+        active_tool_list = []
+        for toolgroup_id in toolgroup_selection:
+            active_tool_list.extend(
+                [
+                    f"{''.join(toolgroup_id)}:{t.identifier}"
+                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
+                ]
+            )
+        with st.expander("🛠 AI Tool Info...", expanded=False):
+            st.subheader(f"Active Tools: {len(active_tool_list)}")
+            st.json(active_tool_list)
+
+    st.divider()
     with st.expander("💾 Save Chat Log..."):
         save_name = st.text_input("💾 Filename to Save", value=f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
 
         if st.button("💾 Save History"):
-            stSession.save_chat_history(save_name, stSession.session_state.messages)
+            stSession.save_chat_history(save_name, stSession.session_state.agent_messages)
             st.success(f"Saved to {save_name}")
 
         history_files = stSession.list_saved_histories()
         selected_file = st.selectbox("📂 Load History", ["-- Select --"] + history_files)
         if selected_file != "-- Select --" and st.button("📂 Load"):
-            stSession.session_state.messages = stSession.load_chat_history(selected_file)
+            stSession.session_state.agent_messages = stSession.load_chat_history(selected_file)
             st.success(f"Loaded {selected_file}")
 
         if os.path.exists(os.path.join(stSession.session_state.history_dir, stSession.session_state.latest_history_filename)):
             if st.button("🕓 Load Latest Chat"):
-                stSession.session_state.messages = stSession.load_chat_history(stSession.session_state.latest_history_filename)
+                stSession.session_state.agent_messages = stSession.load_chat_history(stSession.session_state.latest_history_filename)
                 st.success("Latest chat loaded!")
 
         if st.button("📤 Export to Markdown"):
             md_filename = f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-            stSession.export_chat_to_markdown(md_filename, stSession.session_state.messages)
+            stSession.export_chat_to_markdown(md_filename, stSession.session_state.agent_messages)
             st.success(f"Exported to {md_filename}")
 
 # inference parameters
@@ -227,14 +243,29 @@ inference_parms = {
 # Define Agent for AI Interaction
 @st.cache_resource
 def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
-    return Agent(
-        chatClient, 
-        model=model_name,
-        instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
-        tools=availableTools,
-        tool_config={"tool_choice":"auto"},
-        sampling_params=inferenceParms
-    )
+    match agent_mode:
+        case "agentic":
+            return Agent(
+                chatClient, 
+                model=model_name,
+                instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
+                tools=availableTools,
+                tool_config={"tool_choice":"auto"},
+                sampling_params=inferenceParms
+            )
+        case "react":
+            return ReActAgent(
+                chatClient, 
+                model=model_name,
+                instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
+                tools=availableTools,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": ReActOutput.model_json_schema(),
+                },
+                tool_config={"tool_choice":"auto"},
+                sampling_params=inferenceParms
+            )
 chatAgent = instantiate_ai_agent(stSession.session_state.model_name,
                                 stSession.session_state.system_prompt,
                                 toolgroup_selection, inference_parms)
@@ -260,11 +291,12 @@ if prompt:
             stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
 
             # chat with the ai agent
-            response = chatAgent.create_turn(
-                messages=[{"role": "user", "content": prompt}],
-                session_id=stSession.session_state.agent_session_id,
-                stream=True
-            )
+            with st.spinner("🧠Thinking...."):
+                response = chatAgent.create_turn(
+                    messages=[{"role": "user", "content": prompt}],
+                    session_id=stSession.session_state.agent_session_id,
+                    stream=True
+                )
 
             # parse responses
             message_placeholder = st.empty()
@@ -274,7 +306,6 @@ if prompt:
 
                 if log.role == "tool_execution":
                     retrieval_response += log.content.replace("====", "").strip()
-                    print(retrieval_response)
                 else:
                     full_response += log.content
                     message_placeholder.markdown(full_response + "▌")
@@ -288,7 +319,7 @@ if prompt:
             st.error(f"Request failed: {e}")
 
         # add to history
-        stSession.session_state.agent_messages.append(CompletionMessage(role="assistant", content=response, stop_reason="end_of_turn"))
+        stSession.session_state.agent_messages.append(CompletionMessage(role="assistant", content=full_response, stop_reason="end_of_turn"))
 
         # save latest messages in the last_chat json file on disk
         stSession.save_chat_history(stSession.session_state.latest_history_filename, stSession.session_state.agent_messages)

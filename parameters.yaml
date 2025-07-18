@@ -6,14 +6,15 @@ vectorstore:
   score: 0.6
   max_objects: 10
   mode: "vector"
-  embedding_dimensions: 384
+  embedding_dimensions: 3072
   query_mode: "default"
   collection: "default"
   provider: "inline-chromadb"
   chunk_size_in_tokens: 512
+  embedding_timeout: 3600
 
 openai:
-  default_local_api: "http://10.0.1.126:8321"
+  default_local_api: "http://10.0.1.123:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
