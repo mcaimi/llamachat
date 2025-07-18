@@ -116,6 +116,12 @@ models:
   model_id: ${env.EMBEDDING_MODEL:=all-MiniLM-L6-v2}
   provider_id: sentence-transformers
   model_type: embedding
+- metadata:
+  embedding_dimension: ${env.EMBEDDING_SIZE:=3070}
+  model_id: ${env.EMBEDDING_MODEL:=llama3-embed}
+  provider_id: ollama-inference
+  provider_model_id: llama3.2:3b
+  model_type: embedding
 - metadata: {}
   model_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
   provider_id: ollama-safety
