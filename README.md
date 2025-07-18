@@ -14,6 +14,7 @@ With LlamaChat, users can easily chat with powerful LLMs both in private environ
 - **Multiple Models**: Support for multiple LLM models such as GPT-based models, Ollama models, and others.
 - **RAG Support**: Chat with your documents, using a vector database as embeddings backend
 - **Safety Shields**: Add safety guardrails to user prompts
+- **Agents Support**: Use tools to enhance the LLM capabilities
 
 ## Screenshot
 
