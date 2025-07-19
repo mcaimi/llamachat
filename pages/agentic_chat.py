@@ -117,6 +117,11 @@ with st.sidebar:
 
     st.divider()
     with st.expander("🛠 Agentic"):
+        st.markdown("**Shields**")
+        shield_models = stSession.list_models(model_type="shield")
+        input_shields = st.multiselect(label="Input Shields", options=shield_models, on_change=reset_agent)
+        output_shields = st.multiselect(label="Output Shields", options=shield_models, on_change=reset_agent)
+
         st.markdown("**🔌 Agentic Workflow Capabilities**")
         tool_groups = chatClient.toolgroups.list()
         tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
@@ -251,7 +256,10 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
                 instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
                 tools=availableTools,
                 tool_config={"tool_choice":"auto"},
-                sampling_params=inferenceParms
+                sampling_params=inferenceParms,
+                # Configure safety (optional)
+                input_shields=input_shields,
+                output_shields=output_shields,
             )
         case "react":
             return ReActAgent(
