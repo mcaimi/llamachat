@@ -7,6 +7,12 @@ try:
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
     from libs.shared.session import Session
+    with st.spinner("**Loading Docling Backend...**"):
+        from docling.document_converter import DocumentConverter, PdfFormatOption
+        from docling.datamodel.base_models import InputFormat, DocumentStream
+        from docling.datamodel.pipeline_options import PdfPipelineOptions
+        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+        from docling.chunking import HybridChunker
     import pdfplumber
 except ImportError as e:
     print(f"Caught Exception: {e}")
@@ -34,7 +40,7 @@ st.subheader("Upload Documents", divider=True)
 uploaded_files = st.file_uploader(
             "Upload file(s) or directory",
             accept_multiple_files=True,
-            type=["txt", "pdf", "doc", "docx"],  # Add more file types as needed
+            type=["pdf", "xlsx", "docx", "md", "html"],  # Add more file types as needed
 )
 
 if uploaded_files:
@@ -68,30 +74,89 @@ if uploaded_files:
             help="Enter a unique identifier for this document collection",
         )
 
-    if st.button("Embed Documents...."):
+    # docling conversion options
+    with st.expander("PDF Document Conversion Options", expanded=False):
+        do_ocr = st.checkbox("Use OCR to convert PDFs", value=False)
+        do_table_structure = st.checkbox("Use Table Structure to convert PDFs", value=True)
+        pdf_conversion_backend = st.selectbox(label="Select Backend", options=["PyPDFium", "Docling Pipeline v4"], index=0)
+        match pdf_conversion_backend:
+            case "PyPDFium":
+                pdf_backend = PyPdfiumDocumentBackend
+            case "Docling Pipeline v4":
+                pdf_backend = DoclingParseV4DocumentBackend
+
+    if st.button("Convert And Embed Documents...."):
         # documents to embed:
+        converted_docs = []
         rag_docs = []
+        
+        # Instantiate the docling conversion engine
+        pdf_options = PdfPipelineOptions()
+        pdf_options.do_ocr = do_ocr
+        pdf_options.do_table_structure = do_table_structure
+
+        # Convert PDF to Docling Document
+        converter = DocumentConverter(
+            allowed_formats=[InputFormat.PDF, 
+                            InputFormat.HTML,
+                            InputFormat.MD,
+                            InputFormat.DOCX, 
+                            InputFormat.XLSX],
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=pdf_options,
+                    backend=pdf_backend,
+                )
+            }
+        )
+
+        # convert documents with docling
+        with st.spinner("**Converting...**"):
+            for i, ufile in enumerate(uploaded_files):       
+                # ufile is a bytestream...
+                src = DocumentStream(name=ufile.name, stream=ufile)
+                docling_doc = converter.convert(source=src)
+
+                # get mimetype
+                mimetype = mt.guess_type(ufile.name)[0]
+                print(mimetype)
+
+                # Add metadata to the Docling Document
+                metadata = {
+                    "name": f"{ufile.name}",
+                    "mimetype":f"{mimetype}",
+                    "document_id": f"document_id_{i}",
+                }
+
+                # push to array & free resources
+                converted_docs.append({
+                    "doc": docling_doc,
+                    "metadata": metadata,
+                })
+
+        st.markdown(f"Successfully converted {len(converted_docs)} documents. Ready for ingestion...")
+
         with st.spinner("**Chunking...**"):
             for i, ufile in enumerate(uploaded_files):
-                mtype = mt.guess_type(ufile.name)[0]
-                match mtype:
-                    case "application/pdf":
-                        with pdfplumber.open(ufile) as pdf:
-                            file_contents = ''
-                            for page in pdf.pages:
-                                file_contents += page.extract_text()
+                # perform chunking on the converted documents
+                chunker = HybridChunker()
+                for doc in converted_docs:
+                    chunks = list(chunker.chunk(dl_doc=doc["doc"].document))
+                    for i, chunk in enumerate(chunks):
+                        metadata = doc["metadata"]
+                        # append chunk id
+                        metadata["chunk_id"] = f"{metadata["document_id"]}_chunk_id_{i}"
+                        rag_docs.append({
+                            "content": chunker.contextualize(chunk=chunk),
+                            "mime_type": metadata.get("mimetype"),
+                            "metadata": metadata,
+                            "chunk_metadata": metadata,
+                        })
 
-                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                    case "text/plain":
-                        file_contents = ufile.read().decode("utf-8")
-                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                    
-                rag_docs.append(RAGDocument(
-                    document_id=f"rag_document_{i}",
-                    content=file_contents,
-                    mime_type=mtype,
-                    metadata=metadata,
-                ))
+        st.markdown(f"Successfully chunked: {len(rag_docs)} chunks to embed. Ready for embedding...")
+
+        # free converter
+        del converter
 
         # embed documents!
         if isinstance(vector_db_name, list):
@@ -109,12 +174,7 @@ if uploaded_files:
             )
             
             with st.spinner("**Embedding...**"):
-                embedClient.tool_runtime.rag_tool.insert(
-                    documents=rag_docs,
-                    vector_db_id=vector_db_id,
-                    chunk_size_in_tokens=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
-                    timeout=appSettings.config_parameters.vectorstore.embedding_timeout,
-                )
+                embedClient.vector_io.insert(vector_db_id=vector_db_id, chunks=rag_docs)
             
             st.markdown("**Embedding Done**")
 

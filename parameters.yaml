@@ -14,7 +14,7 @@ vectorstore:
   embedding_timeout: 3600
 
 openai:
-  default_local_api: "http://10.0.1.123:8321"
+  default_local_api: "http://localhost:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "granite3.3:2b"
