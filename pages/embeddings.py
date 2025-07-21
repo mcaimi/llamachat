@@ -34,7 +34,7 @@ st.subheader("Upload Documents", divider=True)
 uploaded_files = st.file_uploader(
             "Upload file(s) or directory",
             accept_multiple_files=True,
-            type=["txt", "pdf", "doc", "docx"],  # Add more file types as needed
+            type=["txt", "pdf", "md"],  # Add more file types as needed
 )
 
 if uploaded_files:
@@ -71,7 +71,7 @@ if uploaded_files:
     if st.button("Embed Documents...."):
         # documents to embed:
         rag_docs = []
-        with st.spinner("**Chunking...**"):
+        with st.spinner("**Loading Documents...**"):
             for i, ufile in enumerate(uploaded_files):
                 mtype = mt.guess_type(ufile.name)[0]
                 match mtype:
@@ -92,6 +92,7 @@ if uploaded_files:
                     mime_type=mtype,
                     metadata=metadata,
                 ))
+        st.markdown(f"Loaded **{len(rag_docs)}** documents into the ingestion pipeline. Ready to embed...")
 
         # embed documents!
         if isinstance(vector_db_name, list):
