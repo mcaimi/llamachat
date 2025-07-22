@@ -24,14 +24,14 @@ providers:
     provider_type: inline::sentence-transformers
     config: {}
   vector_io:
-  - provider_id: chroma
-    provider_type: inline::chromadb
+  - provider_id: milvus-inline
+    provider_type: inline::milvus
     config:
-      db_path: ${env.CHROMA_DB_PATH:=~/.llama/distributions/llamachat-backend}/chromadb.db
-#      - provider_id: chromadb
-#        provider_type: remote::chromadb
-#        config:
-#          url: ${env.CHROMA_DB_URL:=http://localhost:8080}
+      db_path: ${env.MILVUS_DB_PATH:=~/.llama/distributions/llamachat-backend}/milvus.db
+      kvstore:
+        type: sqlite
+        namespace: null
+        db_path: ${env.MILVUS_KVSTORE_PATH:=~/.llama/distributions/llamachat-backend}/milvus_kvstore.db
   safety:
   - provider_id: llama-guard
     provider_type: inline::llama-guard
