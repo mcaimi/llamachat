@@ -119,7 +119,6 @@ if uploaded_files:
 
                 # get mimetype
                 mimetype = mt.guess_type(ufile.name)[0]
-                print(mimetype)
 
                 # Add metadata to the Docling Document
                 metadata = {
@@ -144,6 +143,7 @@ if uploaded_files:
                     chunks = list(chunker.chunk(dl_doc=doc["doc"].document))
                     for i, chunk in enumerate(chunks):
                         metadata = doc["metadata"]
+
                         # append chunk id
                         metadata["chunk_id"] = f"{metadata["document_id"]}_chunk_id_{i}"
                         rag_docs.append({
