@@ -78,8 +78,6 @@ with st.sidebar:
     with st.expander("🛠 Settings"):
         model_list = stSession.list_models(model_type="llm")
         stSession.session_state.model_name = st.selectbox(label="Available models", options=model_list, on_change=reset_agent)
-        embedding_model_list = stSession.list_models(model_type="embedding")
-        stSession.session_state.embedding_model_name = st.selectbox(label="Available embedding models", options=embedding_model_list, on_change=reset_agent)
 
         # select operation mode
         agentic_mode = st.radio("Select Agentic Mode", ["**LlamaStack Agentic**", "**ReAct**"],
@@ -109,7 +107,6 @@ with st.sidebar:
 
     st.markdown(f"**🔌 Current Endpoint:** `{stSession.session_state.api_base_url}`")
     st.markdown(f"**🔌 Current Model:** `{stSession.session_state.model_name}`")
-    st.markdown(f"**🔌 Current Embedding Model:** `{stSession.session_state.embedding_model_name}`")
     st.markdown(f"**🔌 Current Mode:** `{agent_mode}`")
 
     if st.button("Clear Current Chat"):
@@ -152,7 +149,7 @@ with st.sidebar:
         builtin_label_map = {
             "builtin::websearch": "Web search",
             "builtin::rag": "Retrieval augmented generation",
-            "builtin::code_interpreter": "Code generator",
+            "builtin::code_interpreter": "Code interpreter",
             "builtin::wolfram_alpha": "Wolfram Alpha",
         }
         blt_display_options = [builtin_label_map.get(tool, tool) for tool in builtin_tools_list]
@@ -191,6 +188,14 @@ with st.sidebar:
                         },
                     )
                     toolgroup_selection[i] = tool_dict
+                case "builtin::websearch":
+                    tool_dict = dict(
+                        name="builtin::websearch",
+                        args={
+                            "max_results": 10,
+                        },
+                    )
+                    toolgroup_selection[i] = tool_dict
 
         # Final combined selection
         toolgroup_selection.extend(mcp_selection)
@@ -198,6 +203,9 @@ with st.sidebar:
         # display active tools
         active_tool_list = []
         for toolgroup_id in toolgroup_selection:
+            if isinstance(toolgroup_id, dict):
+                toolgroup_id = toolgroup_id.get("name")
+
             active_tool_list.extend(
                 [
                     f"{''.join(toolgroup_id)}:{t.identifier}"
@@ -253,7 +261,7 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
             return Agent(
                 chatClient, 
                 model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
+                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""" ,
                 tools=availableTools,
                 tool_config={"tool_choice":"auto"},
                 sampling_params=inferenceParms,
@@ -265,7 +273,7 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
             return ReActAgent(
                 chatClient, 
                 model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that can be used to respond to the user.""" ,
+                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""" ,
                 tools=availableTools,
                 response_format={
                     "type": "json_schema",
