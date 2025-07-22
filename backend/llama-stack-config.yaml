@@ -90,6 +90,9 @@ providers:
   - provider_id: rag-runtime
     provider_type: inline::rag-runtime
     config: {}
+  - provider_id: bing-search
+    provider_type: remote::bing-search
+    config: {}
   - provider_id: model-context-protocol
     provider_type: remote::model-context-protocol
     config: {}
@@ -136,5 +139,7 @@ benchmarks: []
 tool_groups:
 - toolgroup_id: builtin::rag
   provider_id: rag-runtime
+- toolgroup_id: builtin::websearch
+  provider_id: bing-search
 server:
   port: 8321
