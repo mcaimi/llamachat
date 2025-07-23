@@ -284,6 +284,8 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
                 },
                 tool_config={"tool_choice":"auto"},
                 sampling_params=inferenceParms,
+                input_shields=input_shields,
+                output_shields=output_shields,
                 enable_session_persistence=enable_persistence,
             )
 chatAgent = instantiate_ai_agent(stSession.session_state.model_name,
