@@ -90,6 +90,8 @@ with st.sidebar:
             case "**ReAct**":
                 agent_mode = "react"
 
+        enable_persistence = st.checkbox(label="Enable Session Persistence", value=True)
+
     with st.expander("System Prompt"):
         new_prompt = st.text_area("Update System Prompt", value=stSession.session_state.system_prompt, height=150, on_change=reset_agent,)
         if st.button("🔄 Apply New Prompt"):
@@ -268,6 +270,7 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
                 # Configure safety (optional)
                 input_shields=input_shields,
                 output_shields=output_shields,
+                enable_session_persistence=enable_persistence,
             )
         case "react":
             return ReActAgent(
@@ -280,7 +283,10 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
                     "json_schema": ReActOutput.model_json_schema(),
                 },
                 tool_config={"tool_choice":"auto"},
-                sampling_params=inferenceParms
+                sampling_params=inferenceParms,
+                input_shields=input_shields,
+                output_shields=output_shields,
+                enable_session_persistence=enable_persistence,
             )
 chatAgent = instantiate_ai_agent(stSession.session_state.model_name,
                                 stSession.session_state.system_prompt,
