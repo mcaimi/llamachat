@@ -164,15 +164,20 @@ if uploaded_files:
         else:
             vector_db_id = vector_db_name
 
-        if len(rag_docs) > 0:
+        # create new collection if necessary
+        vector_dbs = embedClient.vector_dbs.list() or []
+        if len(vector_dbs) == 0 or vector_db_id not in [v.identifier for v in vector_dbs]:
             # create vector db on provider
+            st.markdown(f"**Creating new Collection {vector_db_id} on the vdb...**")
             embedClient.vector_dbs.register(
                 vector_db_id=vector_db_id,
                 embedding_model=embedding_model_name,
                 embedding_dimension=appSettings.config_parameters.vectorstore.embedding_dimensions,
                 provider_id=vector_io_provider,
             )
-            
+
+        if len(rag_docs) > 0:
+            # embed documents
             with st.spinner("**Embedding...**"):
                 embedClient.vector_io.insert(vector_db_id=vector_db_id, chunks=rag_docs)
             
