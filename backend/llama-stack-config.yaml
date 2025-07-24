@@ -32,6 +32,13 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.MILVUS_KVSTORE_PATH:=~/.llama/distributions/llamachat-backend}/milvus_kvstore.db
+  - provider_id: faiss-inline
+    provider_type: inline::faiss
+    config:
+      kvstore:
+        type: sqlite
+        namespace: null
+        db_path: ${env.FAISS_KVSTORE_PATH:=~/.llama/distributions/llamachat-backend}/faiss_kvstore.db
   safety:
   - provider_id: llama-guard
     provider_type: inline::llama-guard
