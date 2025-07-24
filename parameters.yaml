@@ -8,8 +8,9 @@ vectorstore:
   mode: "vector"
   embedding_dimensions: 3072
   query_mode: "default"
-  collection: "default"
-  provider: "inline-chromadb"
+  collection: "redhat_collection"
+  provider: "inline-milvus"
+  embedding_model: "sentence-transformers"
   chunk_size_in_tokens: 512
   embedding_timeout: 3600
 
@@ -17,14 +18,13 @@ openai:
   default_local_api: "http://localhost:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
-  model: "granite3.3:2b"
-  embedding_model: "all-MiniLM-L6-v2"
+  model: "tool-calling"
   shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
   timeout: 120
 
 features:
-  enable_rag: False
+  enable_rag: True
   enable_shields: False
 
 llm:
