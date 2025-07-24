@@ -2,18 +2,11 @@
 
 try:
     import streamlit as st
-    import mimetypes as mt
-    from llama_stack_client import RAGDocument, LlamaStackClient
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
     from libs.shared.session import Session
     with st.spinner("**Loading Docling Backend...**"):
-        from docling.document_converter import DocumentConverter, PdfFormatOption
-        from docling.datamodel.base_models import InputFormat, DocumentStream
-        from docling.datamodel.pipeline_options import PdfPipelineOptions
-        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-        from docling.chunking import HybridChunker
-    import pdfplumber
+        from libs.embeddings.embeddings import *
 except ImportError as e:
     print(f"Caught Exception: {e}")
 
@@ -90,68 +83,16 @@ if uploaded_files:
         converted_docs = []
         rag_docs = []
         
-        # Instantiate the docling conversion engine
-        pdf_options = PdfPipelineOptions()
-        pdf_options.do_ocr = do_ocr
-        pdf_options.do_table_structure = do_table_structure
-
-        # Convert PDF to Docling Document
-        converter = DocumentConverter(
-            allowed_formats=[InputFormat.PDF, 
-                            InputFormat.HTML,
-                            InputFormat.MD,
-                            InputFormat.DOCX, 
-                            InputFormat.XLSX],
-            format_options={
-                InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=pdf_options,
-                    backend=pdf_backend,
-                )
-            }
-        )
+        converter = createDoclingConverter(do_ocr=do_ocr, do_table_structure=do_table_structure, pdf_backend=pdf_backend)
 
         # convert documents with docling
         with st.spinner("**Converting...**"):
-            for i, ufile in enumerate(uploaded_files):       
-                # ufile is a bytestream...
-                src = DocumentStream(name=ufile.name, stream=ufile)
-                docling_doc = converter.convert(source=src)
-
-                # get mimetype
-                mimetype = mt.guess_type(ufile.name)[0]
-
-                # Add metadata to the Docling Document
-                metadata = {
-                    "name": f"{ufile.name}",
-                    "mimetype":f"{mimetype}",
-                    "document_id": f"document_id_{i}",
-                }
-
-                # push to array & free resources
-                converted_docs.append({
-                    "doc": docling_doc,
-                    "metadata": metadata,
-                })
+            converted_docs = prepareDocuments(converter, uploaded_files=uploaded_files)
 
         st.markdown(f"Successfully converted {len(converted_docs)} documents. Ready for ingestion...")
 
         with st.spinner("**Chunking...**"):
-            for i, ufile in enumerate(uploaded_files):
-                # perform chunking on the converted documents
-                chunker = HybridChunker()
-                for doc in converted_docs:
-                    chunks = list(chunker.chunk(dl_doc=doc["doc"].document))
-                    for i, chunk in enumerate(chunks):
-                        metadata = doc["metadata"]
-
-                        # append chunk id
-                        metadata["chunk_id"] = f"{metadata["document_id"]}_chunk_id_{i}"
-                        rag_docs.append({
-                            "content": chunker.contextualize(chunk=chunk),
-                            "mime_type": metadata.get("mimetype"),
-                            "metadata": metadata,
-                            "chunk_metadata": metadata,
-                        })
+            rag_docs = chunkFiles(converted_docs)
 
         st.markdown(f"Successfully chunked: {len(rag_docs)} chunks to embed. Ready for embedding...")
 
@@ -169,12 +110,11 @@ if uploaded_files:
         if len(vector_dbs) == 0 or vector_db_id not in [v.identifier for v in vector_dbs]:
             # create vector db on provider
             st.markdown(f"**Creating new Collection {vector_db_id} on the vdb...**")
-            embedClient.vector_dbs.register(
-                vector_db_id=vector_db_id,
-                embedding_model=embedding_model_name,
-                embedding_dimension=appSettings.config_parameters.vectorstore.embedding_dimensions,
-                provider_id=vector_io_provider,
-            )
+            registerVectorCollection(embedClient=embedClient,
+                                    vectorDbId=vector_db_id,
+                                    embeddingModel=embedding_model_name,
+                                    embeddingDim=appSettings.config_parameters.vectorstore.embedding_dimensions,
+                                    providerId=vector_io_provider)
 
         if len(rag_docs) > 0:
             # embed documents
