@@ -3,11 +3,11 @@
 try:
     import streamlit as st
     import mimetypes as mt
-    from llama_stack_client import RAGDocument, LlamaStackClient
+    from llama_stack_client import LlamaStackClient
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
     from libs.shared.session import Session
-    import pdfplumber
+    from libs.embeddings.embeddings import registerVectorCollection, embedDocuments, prepareDocuments
 except ImportError as e:
     print(f"Caught Exception: {e}")
 
@@ -72,26 +72,8 @@ if uploaded_files:
         # documents to embed:
         rag_docs = []
         with st.spinner("**Loading Documents...**"):
-            for i, ufile in enumerate(uploaded_files):
-                mtype = mt.guess_type(ufile.name)[0]
-                match mtype:
-                    case "application/pdf":
-                        with pdfplumber.open(ufile) as pdf:
-                            file_contents = ''
-                            for page in pdf.pages:
-                                file_contents += page.extract_text()
+            rag_docs = prepareDocuments(uploaded_files)
 
-                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                    case "text/plain":
-                        file_contents = ufile.read().decode("utf-8")
-                        metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-                    
-                rag_docs.append(RAGDocument(
-                    document_id=f"rag_document_{i}",
-                    content=file_contents,
-                    mime_type=mtype,
-                    metadata=metadata,
-                ))
         st.markdown(f"Loaded **{len(rag_docs)}** documents into the ingestion pipeline. Ready to embed...")
 
         # embed documents!
@@ -105,21 +87,19 @@ if uploaded_files:
         if len(vector_dbs) == 0 or vector_db_id not in [v.identifier for v in vector_dbs]:
             # create vector db on provider
             st.markdown(f"**Creating new Collection {vector_db_id} on the vdb...**")
-            embedClient.vector_dbs.register(
-                vector_db_id=vector_db_id,
-                embedding_model=embedding_model_name,
-                embedding_dimension=appSettings.config_parameters.vectorstore.embedding_dimensions,
-                provider_id=vector_io_provider,
-            )
+            registerVectorCollection(embedClient=embedClient,
+                                    vectorDbId=vector_db_id,
+                                    embeddingModel=embedding_model_name,
+                                    embeddingDim=appSettings.config_parameters.vectorstore.embedding_dimensions,
+                                    providerId=vector_io_provider)
 
         if len(rag_docs) > 0:
             with st.spinner("**Embedding...**"):
-                embedClient.tool_runtime.rag_tool.insert(
-                    documents=rag_docs,
-                    vector_db_id=vector_db_id,
-                    chunk_size_in_tokens=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
-                    timeout=appSettings.config_parameters.vectorstore.embedding_timeout,
-                )
+                embedDocuments(embedClient=embedClient,
+                            ragDocs=rag_docs,
+                            vectorDbId=vector_db_id,
+                            chunkSize=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
+                            timeout=appSettings.config_parameters.vectorstore.embedding_timeout)
             
             st.markdown("**Embedding Done**")
 
