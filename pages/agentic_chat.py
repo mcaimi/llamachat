@@ -13,13 +13,15 @@ try:
     import requests
     import streamlit as st
     from dotenv import dotenv_values
+
+    with st.spinner("** LOADING INTERFACE... **"):
+        # local imports
+        from libs.shared.settings import Properties
+        from libs.shared.session import Session
+        from libs.shared.utils import build_header
+        from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
-
-# local imports
-from libs.shared.settings import Properties
-from libs.shared.session import Session
-from libs.shared.utils import build_header
 
 # llama stack
 from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
@@ -50,7 +52,6 @@ stSession.add_to_session_state("agent_messages", [])
 
 # session config
 stSession.add_to_session_state("model_name", appSettings.config_parameters.openai.model)
-stSession.add_to_session_state("embedding_model_name", appSettings.config_parameters.openai.embedding_model)
 stSession.add_to_session_state("shield_model_name", appSettings.config_parameters.openai.shield_model)
 stSession.add_to_session_state("temperature", appSettings.config_parameters.llm.temperature)
 stSession.add_to_session_state("top_p", appSettings.config_parameters.llm.top_p)
@@ -301,8 +302,10 @@ for msg in stSession.session_state.agent_messages:
         with st.chat_message(msg.role):
             st.markdown(msg.content, unsafe_allow_html=True)
 
-prompt = st.chat_input("💬 Say something...")
-if prompt:
+prompt_raw = st.chat_input(placeholder="💬 Say something...", accept_file=True, file_type=["txt", "pdf", "md"])
+if prompt_raw:
+    prompt = prompt_raw.get('text')
+    uploaded_files = prompt_raw.get('files')
     st.chat_message("user").markdown(prompt)
 
     # Assistant reply container
@@ -312,10 +315,28 @@ if prompt:
             # append user request
             stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
 
+            # if the user specifies a file, then we need to process it
+            if len(uploaded_files) > 0:
+                with st.spinner("🧠 Embedding...."):
+                    # instantiate converter
+                    converter = createDoclingConverter(do_ocr=False, do_table_structure=True)
+                    # prepare documents to be embedded
+                    st.markdown(f"**Prepare Document...**")
+                    docs = prepareDocuments(converter, uploaded_files=uploaded_files)
+                    augmented_query = ""
+                    for d in docs:
+                        augmented_query += d.get('doc').document.export_to_markdown()
+                    
+                    # update prompt...
+                    augmented_prompt: str = f"{prompt}. Your context is: {augmented_query}"
+
+                    del converter
+                st.markdown("** Conversion Done! **")
+
             # chat with the ai agent
             with st.spinner("🧠Thinking...."):
                 response = chatAgent.create_turn(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[{"role": "user", "content": augmented_prompt}],
                     session_id=stSession.session_state.agent_session_id,
                     stream=True
                 )
