@@ -315,6 +315,8 @@ if prompt_raw:
             # append user request
             stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
 
+            augmented_prompt: str = f"{prompt}."
+
             # if the user specifies a file, then we need to process it
             if len(uploaded_files) > 0:
                 with st.spinner("🧠 Embedding...."):
@@ -328,7 +330,7 @@ if prompt_raw:
                         augmented_query += d.get('doc').document.export_to_markdown()
                     
                     # update prompt...
-                    augmented_prompt: str = f"{prompt}. Your context is: {augmented_query}"
+                    augmented_prompt += f"Your context is: {augmented_query}"
 
                     del converter
                 st.markdown("** Conversion Done! **")
