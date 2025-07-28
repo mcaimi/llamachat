@@ -82,7 +82,7 @@ if uploaded_files:
         # documents to embed:
         converted_docs = []
         rag_docs = []
-        
+
         converter = createDoclingConverter(do_ocr=do_ocr, do_table_structure=do_table_structure, pdf_backend=pdf_backend)
 
         # convert documents with docling
