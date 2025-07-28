@@ -6,6 +6,8 @@
 #
 
 import os
+import io
+import base64
 from datetime import datetime
 import json, uuid
 
@@ -134,6 +136,7 @@ with st.sidebar:
             "mcp::pdf": "Document generator",
             "mcp::slack": "Slack integration",
             "mcp::telegram": "Telegram Integration",
+            "mcp::opencv": "OpenCV Toolkit",
         }
         mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
         mcp_label_to_tool = {mcp_label_map.get(k, k): k for k in mcp_tools_list}
@@ -302,7 +305,7 @@ for msg in stSession.session_state.agent_messages:
         with st.chat_message(msg.role):
             st.markdown(msg.content, unsafe_allow_html=True)
 
-prompt_raw = st.chat_input(placeholder="💬 Say something...", accept_file=True, file_type=["txt", "pdf", "md"])
+prompt_raw = st.chat_input(placeholder="💬 Say something...", accept_file=True, file_type=appSettings.config_parameters.features.supported_img_formats + appSettings.config_parameters.features.supported_data_formats)
 if prompt_raw:
     prompt = prompt_raw.get('text')
     uploaded_files = prompt_raw.get('files')
@@ -312,28 +315,45 @@ if prompt_raw:
     with st.chat_message("assistant"):
         # execute inference on chat endpoint
         try:
-            # append user request
-            stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
-
-            augmented_prompt: str = f"{prompt}."
+            augmented_prompt = f"{prompt}."
 
             # if the user specifies a file, then we need to process it
             if len(uploaded_files) > 0:
-                with st.spinner("🧠 Embedding...."):
-                    # instantiate converter
-                    converter = createDoclingConverter(do_ocr=False, do_table_structure=True)
-                    # prepare documents to be embedded
-                    st.markdown(f"**Prepare Document...**")
-                    docs = prepareDocuments(converter, uploaded_files=uploaded_files)
-                    augmented_query = ""
-                    for d in docs:
-                        augmented_query += d.get('doc').document.export_to_markdown()
-                    
-                    # update prompt...
-                    augmented_prompt += f"Your context is: {augmented_query}"
+                for f in uploaded_files:
+                    if f.name.split(".")[-1] in appSettings.config_parameters.features.supported_img_formats:
+                        st.image(f)
+                        
+                        # base64 encoding
+                        im_b64 = base64.b64encode(f.read()).decode("utf-8")
 
-                    del converter
-                st.markdown("** Conversion Done! **")
+                        # update prompt:
+                        augmented_prompt = []
+                        augmented_prompt.append({"type": "text", "text": f"{prompt}."})
+                        augmented_prompt.append({
+                            "type": "image",
+                            "image": {
+                                "data": im_b64
+                            }
+                        })
+                    else:
+                        with st.spinner(f"🧠 Embedding.... {f.name}"):
+                            # instantiate converter
+                            converter = createDoclingConverter(do_ocr=False, do_table_structure=True)
+                            # prepare documents to be embedded
+                            st.markdown(f"**Prepare Document...**")
+                            docs = prepareDocuments(converter, uploaded_files=[f])
+                            augmented_query = ""
+                            for d in docs:
+                                augmented_query += d.get('doc').document.export_to_markdown()
+                            
+                            # update prompt...
+                            augmented_prompt += f"Your context is: {augmented_query}"
+
+                            del converter
+                        st.markdown("** Conversion Done! **")
+
+            # append user request
+            stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
 
             # chat with the ai agent
             with st.spinner("🧠Thinking...."):

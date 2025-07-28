@@ -33,7 +33,7 @@ st.subheader("Upload Documents", divider=True)
 uploaded_files = st.file_uploader(
             "Upload file(s) or directory",
             accept_multiple_files=True,
-            type=["pdf", "xlsx", "docx", "md", "html"],  # Add more file types as needed
+            type=appSettings.config_parameters.features.supported_data_formats,  # Add more file types as needed
 )
 
 if uploaded_files:
