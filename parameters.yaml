@@ -26,6 +26,8 @@ openai:
 features:
   enable_rag: True
   enable_shields: False
+  supported_data_formats: ["pdf", "xlsx", "docx", "md", "html"]
+  supported_img_formats: ["jpg", "png"]
 
 llm:
   temperature: 0.8
@@ -34,4 +36,4 @@ llm:
   presence_penalty: 1.1
   repeat_penalty: 1.1
   n_comp: 1
-  system_prompt: "You are an helpful assistant tasked to retrieve informations from a knowledge base. You must respond precisely and in no more than four senteces. If you cannot respond please tell that you do not know the answer. Use the following context to answer the question."
+  system_prompt: "You are an helpful assistant able to perform different tasks. You have tools at your disposal and can use them in order to solve the task at hand. If you cannot respond please tell that you do not know the answer. Use the following context to answer the question."
