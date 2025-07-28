@@ -111,16 +111,25 @@ inference_store:
   db_path: ${env.SQLITE_STORE_DIR:=~/.llama/distributions/llamachat-backend}/inference_store.db
 models:
 - metadata: {}
-  model_id: ${env.INFERENCE_MODEL:=granite3.3:2b}
+  model_id: ${env.INFERENCE_MODEL:=granite3.3}
   provider_id: ollama-inference
+  provider_model_id: granite3.3:2b
   model_type: llm
 - metadata: {}
-  model_id: ${env.INFERENCE_MODEL:=llama3.2:3b}
+  model_id: ${env.INFERENCE_MODEL:=llama3.2}
   provider_id: ollama-inference
+  provider_model_id: llama3.2:3b
   model_type: llm
 - metadata: {}
-  model_id: ${env.INFERENCE_MODEL:=qwen3:8b}
+  model_id: ${env.INFERENCE_MODEL:=qwen3}
   provider_id: ollama-inference
+  provider_model_id: qwen3:8b
+  model_type: llm
+- metadata: {}
+  model_id: ${env.INFERENCE_MODEL:=llava-multimodal}
+  provider_id: ollama-inference
+  provider_model_id: llava:7b
+  model_type: llm
 - metadata:
   embedding_dimension: ${env.EMBEDDING_SIZE:=384}
   model_id: ${env.EMBEDDING_MODEL:=all-MiniLM-L6-v2}
@@ -133,12 +142,12 @@ models:
   provider_model_id: llama3.2:3b
   model_type: embedding
 - metadata: {}
-  model_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
+  model_id: ${env.SAFETY_MODEL:=Llama-Guard-3-1B}
   provider_id: ollama-safety
   provider_model_id: ${env.SAFETY_MODEL_OLLAMA:=llama-guard3:1b}
   model_type: llm
 shields:
-- shield_id: ${env.SAFETY_MODEL:=meta-llama/Llama-Guard-3-1B}
+- shield_id: ${env.SAFETY_MODEL:=Llama-Guard-3-1B}
 vector_dbs: []
 datasets: []
 scoring_fns: []
@@ -148,5 +157,9 @@ tool_groups:
   provider_id: rag-runtime
 - toolgroup_id: builtin::websearch
   provider_id: bing-search
+- toolgroup_id: mcp::utilities
+  provider_id: model-context-protocol
+  mcp_endpoint:
+    uri: "http://localhost:8000/sse"
 server:
   port: 8321
