@@ -13,14 +13,15 @@ try:
     import requests
     import streamlit as st
     from dotenv import dotenv_values
+
+    with st.spinner("** LOADING INTERFACE... **"):
+        # local imports
+        from libs.shared.settings import Properties
+        from libs.shared.session import Session
+        from libs.shared.utils import build_header
+        from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
-
-# local imports
-from libs.shared.settings import Properties
-from libs.shared.session import Session
-from libs.shared.utils import build_header
-from libs.embeddings.embeddings import prepareDocuments, embedDocuments, registerVectorCollection
 
 # llama stack
 from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
@@ -314,25 +315,30 @@ if prompt_raw:
             # append user request
             stSession.session_state.agent_messages.append(UserMessage(content=prompt, role="user"))
 
+            augmented_prompt: str = f"{prompt}."
+
             # if the user specifies a file, then we need to process it
             if len(uploaded_files) > 0:
                 with st.spinner("🧠 Embedding...."):
+                    # instantiate converter
+                    converter = createDoclingConverter(do_ocr=False, do_table_structure=True)
                     # prepare documents to be embedded
-                    docs = prepareDocuments(uploaded_files=uploaded_files)
-                    # embed documents
-                    for collection in selected_vector_dbs:
-                        st.markdown(f"**Embedding in collection '{collection}'...**")
-                        embedDocuments(embedClient=chatClient,
-                                    ragDocs=docs,
-                                    vectorDbId=collection,
-                                    chunkSize=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
-                                    timeout=appSettings.config_parameters.vectorstore.embedding_timeout)
-                st.markdown("** Embedding Done! **")
+                    st.markdown(f"**Prepare Document...**")
+                    docs = prepareDocuments(converter, uploaded_files=uploaded_files)
+                    augmented_query = ""
+                    for d in docs:
+                        augmented_query += d.get('doc').document.export_to_markdown()
+                    
+                    # update prompt...
+                    augmented_prompt += f"Your context is: {augmented_query}"
+
+                    del converter
+                st.markdown("** Conversion Done! **")
 
             # chat with the ai agent
             with st.spinner("🧠Thinking...."):
                 response = chatAgent.create_turn(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[{"role": "user", "content": augmented_prompt}],
                     session_id=stSession.session_state.agent_session_id,
                     stream=True
                 )

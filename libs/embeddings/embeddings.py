@@ -1,13 +1,18 @@
-#!/usr/bin/env/python
+#!/usr/local/env python
 
 try:
-    from llama_stack_client import LlamaStackClient, RAGDocument
-    from libs.shared.settings import Properties
     import mimetypes as mt
+    from llama_stack_client import RAGDocument, LlamaStackClient
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    from docling.datamodel.base_models import InputFormat, DocumentStream
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+    from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend      
+    from docling.chunking import HybridChunker
     import pdfplumber
-except ImportError as e:
-    print(f"Caught Exception: {e}")
-            
+except Exception as e:
+    print(f"Caught fatal exception: {e}")
+
 # create or register a collection in the vector db
 def registerVectorCollection(embedClient: LlamaStackClient,
                             vectorDbId: str,
@@ -22,40 +27,77 @@ def registerVectorCollection(embedClient: LlamaStackClient,
         provider_id=providerId,
     )
 
-def embedDocuments(embedClient: LlamaStackClient,
-                   ragDocs: list,
-                   vectorDbId: str,
-                   chunkSize: int,
-                   timeout: int) -> None:
-    embedClient.tool_runtime.rag_tool.insert(
-        documents=ragDocs,
-        vector_db_id=vectorDbId,
-        chunk_size_in_tokens=chunkSize,
-        timeout=timeout,
+def createDoclingConverter(do_ocr: bool, do_table_structure: bool, pdf_backend: PyPdfiumDocumentBackend|DoclingParseV4DocumentBackend = PyPdfiumDocumentBackend) -> DocumentConverter:
+    # Instantiate the docling conversion engine
+    pdf_options = PdfPipelineOptions()
+    pdf_options.do_ocr = do_ocr
+    pdf_options.do_table_structure = do_table_structure
+
+    # Convert PDF to Docling Document
+    converter = DocumentConverter(
+        allowed_formats=[InputFormat.PDF, 
+                        InputFormat.HTML,
+                        InputFormat.MD,
+                        InputFormat.DOCX, 
+                        InputFormat.XLSX],
+        format_options={
+            InputFormat.PDF: PdfFormatOption(
+                pipeline_options=pdf_options,
+                backend=pdf_backend,
+            )
+        }
     )
 
-def prepareDocuments(uploaded_files: list) -> list:
-    list_of_docs = []
-    for i, ufile in enumerate(uploaded_files):
-        mtype = mt.guess_type(ufile.name)[0]
-        match mtype:
-            case "application/pdf":
-                with pdfplumber.open(ufile) as pdf:
-                    file_contents = ''
-                    for page in pdf.pages:
-                        file_contents += page.extract_text()
+    # return handler
+    return converter
 
-                metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-            case "text/plain":
-                file_contents = ufile.read().decode("utf-8")
-                metadata = {"name": f"{ufile.name}", "mimetype": {mtype}}
-            
-        list_of_docs.append(RAGDocument(
-            document_id=f"rag_document_{i}",
-            content=file_contents,
-            mime_type=mtype,
-            metadata=metadata,
-        ))
+def prepareDocuments(converter: DocumentConverter, uploaded_files: list) -> list:
+    converted_docs = []
 
-    # return data
-    return list_of_docs
+    for i, ufile in enumerate(uploaded_files):       
+        # ufile is a bytestream...
+        src = DocumentStream(name=ufile.name, stream=ufile)
+        docling_doc = converter.convert(source=src)
+        
+        # get mimetype
+        mimetype = mt.guess_type(ufile.name)[0]
+        
+        # Add metadata to the Docling Document
+        metadata = {
+            "name": f"{ufile.name}",
+            "mimetype":f"{mimetype}",
+            "document_id": f"document_id_{i}",
+        }
+        
+        # push to array & free resources
+        converted_docs.append({
+            "doc": docling_doc,
+            "metadata": metadata,
+        })
+    
+    # return documents
+    return converted_docs
+
+def chunkFiles(converted_docs: list) -> list:
+    for i, ufile in enumerate(converted_docs):
+        # perform chunking on the converted documents
+        chunker = HybridChunker()
+        docs = []
+
+        for doc in converted_docs:
+            chunks = list(chunker.chunk(dl_doc=doc["doc"].document))
+            for i, chunk in enumerate(chunks):
+                metadata = doc["metadata"]
+
+                # append chunk id
+                metadata["chunk_id"] = f"{metadata["document_id"]}_chunk_id_{i}"
+                
+                docs.append({
+                    "content": chunker.contextualize(chunk=chunk),
+                    "mime_type": metadata.get("mimetype"),
+                    "metadata": metadata,
+                    "chunk_metadata": metadata,
+                })
+    
+    # return docs
+    return docs

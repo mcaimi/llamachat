@@ -2,12 +2,11 @@
 
 try:
     import streamlit as st
-    import mimetypes as mt
-    from llama_stack_client import LlamaStackClient
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
     from libs.shared.session import Session
-    from libs.embeddings.embeddings import registerVectorCollection, embedDocuments, prepareDocuments
+    with st.spinner("**Loading Docling Backend...**"):
+        from libs.embeddings.embeddings import *
 except ImportError as e:
     print(f"Caught Exception: {e}")
 
@@ -34,7 +33,7 @@ st.subheader("Upload Documents", divider=True)
 uploaded_files = st.file_uploader(
             "Upload file(s) or directory",
             accept_multiple_files=True,
-            type=["txt", "pdf", "md"],  # Add more file types as needed
+            type=["pdf", "xlsx", "docx", "md", "html"],  # Add more file types as needed
 )
 
 if uploaded_files:
@@ -68,13 +67,37 @@ if uploaded_files:
             help="Enter a unique identifier for this document collection",
         )
 
-    if st.button("Embed Documents...."):
-        # documents to embed:
-        rag_docs = []
-        with st.spinner("**Loading Documents...**"):
-            rag_docs = prepareDocuments(uploaded_files)
+    # docling conversion options
+    with st.expander("PDF Document Conversion Options", expanded=False):
+        do_ocr = st.checkbox("Use OCR to convert PDFs", value=False)
+        do_table_structure = st.checkbox("Use Table Structure to convert PDFs", value=True)
+        pdf_conversion_backend = st.selectbox(label="Select Backend", options=["PyPDFium", "Docling Pipeline v4"], index=0)
+        match pdf_conversion_backend:
+            case "PyPDFium":
+                pdf_backend = PyPdfiumDocumentBackend
+            case "Docling Pipeline v4":
+                pdf_backend = DoclingParseV4DocumentBackend
 
-        st.markdown(f"Loaded **{len(rag_docs)}** documents into the ingestion pipeline. Ready to embed...")
+    if st.button("Convert And Embed Documents...."):
+        # documents to embed:
+        converted_docs = []
+        rag_docs = []
+
+        converter = createDoclingConverter(do_ocr=do_ocr, do_table_structure=do_table_structure, pdf_backend=pdf_backend)
+
+        # convert documents with docling
+        with st.spinner("**Converting...**"):
+            converted_docs = prepareDocuments(converter, uploaded_files=uploaded_files)
+
+        st.markdown(f"Successfully converted {len(converted_docs)} documents. Ready for ingestion...")
+
+        with st.spinner("**Chunking...**"):
+            rag_docs = chunkFiles(converted_docs)
+
+        st.markdown(f"Successfully chunked: {len(rag_docs)} chunks to embed. Ready for embedding...")
+
+        # free converter
+        del converter
 
         # embed documents!
         if isinstance(vector_db_name, list):
@@ -94,12 +117,9 @@ if uploaded_files:
                                     providerId=vector_io_provider)
 
         if len(rag_docs) > 0:
+            # embed documents
             with st.spinner("**Embedding...**"):
-                embedDocuments(embedClient=embedClient,
-                            ragDocs=rag_docs,
-                            vectorDbId=vector_db_id,
-                            chunkSize=appSettings.config_parameters.vectorstore.chunk_size_in_tokens,
-                            timeout=appSettings.config_parameters.vectorstore.embedding_timeout)
+                embedClient.vector_io.insert(vector_db_id=vector_db_id, chunks=rag_docs)
             
             st.markdown("**Embedding Done**")
 

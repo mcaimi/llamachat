@@ -6,7 +6,7 @@ vectorstore:
   score: 0.6
   max_objects: 10
   mode: "vector"
-  embedding_dimensions: 3072
+  embedding_dimensions: 384
   query_mode: "default"
   collection: "redhat_collection"
   provider: "inline-milvus"

@@ -127,7 +127,7 @@ models:
   provider_id: sentence-transformers
   model_type: embedding
 - metadata:
-  embedding_dimension: ${env.EMBEDDING_SIZE:=3070}
+  embedding_dimension: ${env.EMBEDDING_SIZE:=3072}
   model_id: ${env.EMBEDDING_MODEL:=llama3-embed}
   provider_id: ollama-inference
   provider_model_id: llama3.2:3b
