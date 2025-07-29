@@ -1,0 +1,135 @@
+<doctag><text><loc_66><loc_61><loc_413><loc_80>Network Working Group H. Krawczyk Request for Comments: 2104 IBM Category: Informational M. Bellare</text>
+<text><loc_65><loc_82><loc_413><loc_86>UCSD</text>
+<text><loc_65><loc_89><loc_413><loc_93>R. Canetti</text>
+<text><loc_65><loc_96><loc_413><loc_100>IBM</text>
+<text><loc_65><loc_103><loc_412><loc_108>February 1997</text>
+<text><loc_65><loc_124><loc_354><loc_129>HMAC: Keyed-Hashing for Message Authentication</text>
+<text><loc_66><loc_137><loc_158><loc_142>Status of This Memo</text>
+<text><loc_65><loc_151><loc_418><loc_169>This memo provides information for the Internet community. This memo does not specify an Internet standard of any kind. Distribution of this memo is unlimited.</text>
+<section_header_level_1><loc_65><loc_179><loc_104><loc_183>Abstract</section_header_level_1>
+<text><loc_65><loc_193><loc_413><loc_226>This document describes HMAC, a mechanism for message authentication using cryptographic hash functions. HMAC can be used with any iterative cryptographic hash function, e.g., MD5, SHA-1, in combination with a secret shared key. The cryptographic strength of HMAC depends on the properties of the underlying hash function.</text>
+<section_header_level_1><loc_66><loc_235><loc_138><loc_239>1. Introduction</section_header_level_1>
+<text><loc_65><loc_249><loc_418><loc_337>Providing a way to check the integrity of information transmitted over or stored in an unreliable medium is a prime necessity in the world of open computing and communications. Mechanisms that provide such integrity check based on a secret key are usually called "message authentication codes" (MAC). Typically, message authentication codes are used between two parties that share a secret key in order to validate information transmitted between these parties. In this document we present such a MAC mechanism based on cryptographic hash functions. This mechanism, called HMAC, is based on work by the authors [BCK1] where the construction is presented and cryptographically analyzed. We refer to that work for the details on the rationale and security analysis of HMAC, and its comparison to other keyed-hash methods.</text>
+<text><loc_66><loc_415><loc_416><loc_420>Krawczyk, et. al. Informational [Page 1]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<text><loc_65><loc_47><loc_413><loc_79>HMAC can be used in combination with any iterated cryptographic hash function. MD5 and SHA-1 are examples of such hash functions. HMAC also uses a secret key for calculation and verification of the message authentication values. The main goals behind this construction are</text>
+<unordered_list><list_item><loc_65><loc_89><loc_382><loc_108>To use, without modifications, available hash functions. In particular, hash functions that perform well in software, and for which code is freely and widely available.</list_item>
+<list_item><loc_65><loc_117><loc_408><loc_129>To preserve the original performance of the hash function without incurring a significant degradation.</list_item>
+<list_item><loc_65><loc_137><loc_279><loc_143>To use and handle keys in a simple way.</list_item>
+<list_item><loc_65><loc_151><loc_418><loc_170>To have a well understood cryptographic analysis of the strength of the authentication mechanism based on reasonable assumptions on the underlying hash function.</list_item>
+<list_item><loc_65><loc_179><loc_418><loc_198>To allow for easy replaceability of the underlying hash function in case that faster or more secure hash functions are found or required.</list_item>
+</unordered_list>
+<text><loc_65><loc_207><loc_408><loc_246>This document specifies HMAC using a generic cryptographic hash function (denoted by H). Specific instantiations of HMAC need to define a particular hash function. Current candidates for such hash functions include SHA-1 [SHA], MD5 [MD5], RIPEMD-128/160 [RIPEMD]. These different realizations of HMAC will be denoted by HMAC-SHA1, HMAC-MD5, HMAC-RIPEMD, etc.</text>
+<text><loc_65><loc_255><loc_413><loc_344>Note: To the date of writing of this document MD5 and SHA-1 are the most widely used cryptographic hash functions. MD5 has been recently shown to be vulnerable to collision search attacks [Dobb]. This attack and other currently known weaknesses of MD5 do not compromise the use of MD5 within HMAC as specified in this document (see [Dobb]); however, SHA-1 appears to be a cryptographically stronger function. To this date, MD5 can be considered for use in HMAC for applications where the superior performance of MD5 is critical. In any case, implementers and users need to be aware of possible cryptanalytic developments regarding any of these cryptographic hash functions, and the eventual need to replace the underlying hash function. (See section 6 for more information on the security of HMAC.)</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 2]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<section_header_level_1><loc_66><loc_47><loc_168><loc_51>2. Definition of HMAC</section_header_level_1>
+<text><loc_65><loc_61><loc_418><loc_143>The definition of HMAC requires a cryptographic hash function, which we denote by H, and a secret key K. We assume H to be a cryptographic hash function where data is hashed by iterating a basic compression function on blocks of data. We denote by B the byte-length of such blocks (B=64 for all the above mentioned examples of hash functions), and by L the byte-length of hash outputs (L=16 for MD5, L=20 for SHA-1). The authentication key K can be of any length up to B, the block length of the hash function. Applications that use keys longer than B bytes will first hash the key using H and then use the resultant L byte string as the actual key to HMAC. In any case the minimal recommended length for K is L bytes (as the hash output length). See section 3 for more information on keys.</text>
+<text><loc_65><loc_151><loc_403><loc_163>We define two fixed and different strings ipad and opad as follows (the 'i' and 'o' are mnemonics for inner and outer):</text>
+<text><loc_65><loc_172><loc_339><loc_184>ipad = the byte 0x36 repeated B times opad = the byte 0x5C repeated B times.</text>
+<text><loc_65><loc_193><loc_310><loc_198>To compute HMAC over the data ‘text’ we perform</text>
+<text><loc_65><loc_207><loc_328><loc_212>H(K XOR opad, H(K XOR ipad, text))</text>
+<text><loc_65><loc_221><loc_112><loc_226>Namely,</text>
+<ordered_list><list_item><loc_65><loc_235><loc_388><loc_254>append zeros to the end of K to create a B byte string (e.g., if K is of length 20 bytes and B=64, then K will be appended with 44 zero bytes 0x00)</list_item>
+<list_item><loc_65><loc_255><loc_403><loc_268>XOR (bitwise exclusive-OR) the B byte string computed in step (1) with ipad</list_item>
+<list_item><loc_65><loc_269><loc_413><loc_281>append the stream of data 'text' to the B byte string resulting from step (2)</list_item>
+<list_item><loc_65><loc_283><loc_313><loc_288>apply H to the stream generated in step (3)</list_item>
+<list_item><loc_65><loc_290><loc_379><loc_302>XOR (bitwise exclusive-OR) the B byte string computed in step (1) with opad</list_item>
+<list_item><loc_65><loc_304><loc_369><loc_316>append the H result from step (4) to the B byte string resulting from step (5)</list_item>
+<list_item><loc_65><loc_318><loc_369><loc_329>apply H to the stream generated in step (6) and output the result</list_item>
+</ordered_list>
+<text><loc_81><loc_339><loc_418><loc_351>For illustration purposes, sample code based on MD5 is provided as an appendix.</text>
+<code><loc_66><loc_401><loc_416><loc_406><_unknown_>Krawczyk, et. al. Informational [Page 3]</code>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<section_header_level_1><loc_66><loc_47><loc_99><loc_52>3. Keys</section_header_level_1>
+<text><loc_65><loc_61><loc_408><loc_107>The key for HMAC can be of any length (keys longer than B bytes are first hashed using H). However, less than L bytes is strongly discouraged as it would decrease the security strength of the function. Keys longer than L bytes are acceptable but the extra length would not significantly increase the function strength. (A longer key may be advisable if the randomness of the key is considered weak.)</text>
+<text><loc_65><loc_117><loc_418><loc_163>Keys need to be chosen at random (or using a cryptographically strong pseudo-random generator seeded with a random seed), and periodically refreshed. (Current attacks do not indicate a specific recommended frequency for key changes as these attacks are practically infeasible. However, periodic key refreshment is a fundamental security practice that helps against potential weaknesses of the function and keys, and limits the damage of an exposed key.)</text>
+<section_header_level_1><loc_66><loc_172><loc_173><loc_177>4. Implementation Note</section_header_level_1>
+<text><loc_65><loc_186><loc_418><loc_233>HMAC is defined in such a way that the underlying hash function H can be used with no modification to its code. In particular, it uses the function H with the pre-defined initial value IV (a fixed value specified by each iterative hash function to initialize its compression function). However, if desired, a performance improvement can be achieved at the cost of (possibly) modifying the code of H to support variable IVs.</text>
+<text><loc_65><loc_242><loc_418><loc_316>The idea is that the intermediate results of the compression function on the B-byte blocks (K XOR ipad) and (K XOR opad) can be precomputed only once at the time of generation of the key K, or before its first use. These intermediate results are stored and then used to initialize the IV of H each time that a message needs to be authenticated. This method saves, for each authenticated message, the application of the compression function of H on two B-byte blocks (i.e., on (K XOR ipad) and (K XOR opad)). Such a savings may be significant when authenticating short streams of data. We stress that the stored intermediate values need to be treated and protected the same as secret keys.</text>
+<text><loc_65><loc_325><loc_393><loc_337>Choosing to implement HMAC in the above way is a decision of the local implementation and has no effect on inter-operability.</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 4]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<section_header_level_1><loc_66><loc_47><loc_158><loc_52>5. Truncated output</section_header_level_1>
+<text><loc_65><loc_61><loc_418><loc_205>A well-known practice with message authentication codes is to truncate the output of the MAC and output only part of the bits (e.g., [MM, ANSI]). Preneel and van Oorschot [PV] show some analytical advantages of truncating the output of hash-based MAC functions. The results in this area are not absolute as for the overall security advantages of truncation. It has advantages (less information on the hash result available to an attacker) and disadvantages (less bits to predict for the attacker). Applications of HMAC can choose to truncate the output of HMAC by outputting the t leftmost bits of the HMAC computation for some parameter t (namely, the computation is carried in the normal way as defined in section 2 above but the end result is truncated to t bits). We recommend that the output length t be not less than half the length of the hash output (to match the birthday attack bound) and not less than 80 bits (a suitable lower bound on the number of bits that need to be predicted by an attacker). We propose denoting a realization of HMAC that uses a hash function H with t bits of output as HMAC-H-t. For example, HMAC-SHA1-80 denotes HMAC computed using the SHA-1 function and with the output truncated to 80 bits. (If the parameter t is not specified, e.g. HMAC-MD5, then it is assumed that all the bits of the hash are output.)</text>
+<section_header_level_1><loc_66><loc_214><loc_119><loc_219>6. Security</section_header_level_1>
+<text><loc_65><loc_228><loc_418><loc_288>The security of the message authentication mechanism presented here depends on cryptographic properties of the hash function H: the resistance to collision finding (limited to the case where the initial value is secret and random, and where the output of the function is not explicitly available to the attacker), and the message authentication property of the compression function of H when applied to single blocks (in HMAC these blocks are partially unknown to an attacker as they contain the result of the inner H computation and, in particular, cannot be fully chosen by the attacker).</text>
+<text><loc_65><loc_297><loc_413><loc_344>These properties, and actually stronger ones, are commonly assumed for hash functions of the kind used with HMAC. In particular, a hash function for which the above properties do not hold would become unsuitable for most (probably, all) cryptographic applications, including alternative message authentication schemes based on such functions. (For a complete analysis and rationale of the HMAC function the reader is referred to [BCK1].)</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 5]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<text><loc_65><loc_47><loc_413><loc_73>Given the limited confidence gained so far as for the cryptographic strength of candidate hash functions, it is important to observe the following two properties of the HMAC construction and its secure use for message authentication:</text>
+<ordered_list><list_item><loc_65><loc_82><loc_408><loc_101>The construction is independent of the details of the particular hash function H in use and then the latter can be replaced by any other secure (iterative) cryptographic hash function.</list_item>
+<list_item><loc_65><loc_110><loc_417><loc_156>Message authentication, as opposed to encryption, has a "transient" effect. A published breaking of a message authentication scheme would lead to the replacement of that scheme, but would have no adversarial effect on information authenticated in the past. This is in sharp contrast with encryption, where information encrypted today may suffer from exposure in the future if, and when, the encryption algorithm is broken.</list_item>
+</ordered_list>
+<text><loc_65><loc_165><loc_418><loc_184>The strongest attack known against HMAC is based on the frequency of collisions for the hash function H ("birthday attack") [PV,BCK2], and is totally impractical for minimally reasonable hash functions.</text>
+<text><loc_65><loc_193><loc_418><loc_288>As an example, if we consider a hash function like MD5 where the output length equals L=16 bytes (128 bits) the attacker needs to acquire the correct message authentication tags computed (with the _same_ secret key K!) on about 2**64 known plaintexts. This would require the processing of at least 2**64 blocks under H, an impossible task in any realistic scenario (for a block length of 64 bytes this would take 250,000 years in a continuous 1Gbps link, and without changing the secret key K during all this time). This attack could become realistic only if serious flaws in the collision behavior of the function H are discovered (e.g. collisions found after 2**30 messages). Such a discovery would determine the immediate replacement of the function H (the effects of such failure would be far more severe for the traditional uses of H in the context of digital signatures, public key certificates, etc.).</text>
+<text><loc_65><loc_297><loc_418><loc_344>Note: this attack needs to be strongly contrasted with regular collision attacks on cryptographic hash functions where no secret key is involved and where 2**64 off-line parallelizable (!) operations suffice to find collisions. The latter attack is approaching feasibility [VW] while the birthday attack on HMAC is totally impractical. (In the above examples, if one uses a hash function with, say, 160 bit of output then 2**64 should be replaced by 2**80.)</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 6]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<text><loc_65><loc_47><loc_413><loc_80>A correct implementation of the above construction, the choice of random (or cryptographically pseudorandom) keys, a secure key exchange mechanism, frequent key refreshments, and good secrecy protection of keys are all essential ingredients for the security of the integrity verification mechanism provided by HMAC.</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 7]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<text><loc_65><loc_47><loc_177><loc_52>Appendix -- Sample Code</text>
+<code><loc_65><loc_61><loc_418><loc_406><_unknown_>For the sake of illustration we provide the following sample code for the implementation of HMAC-MD5 as well as some corresponding test vectors (the code is based on MD5 code as described in [MD5]). /* ** Function: hmac_md5 */ void hmac_md5(text, text_len, key, key_len, digest) unsigned char* text; /* pointer to data stream */ int text_len; /* length of data stream */ unsigned char* key; /* pointer to authentication key */ int key_len; /* length of authentication key */ caddr_t digest; /* caller digest to be filled in */ { MD5_CTX context; unsigned char k_ipad[65]; /* inner padding * key XORd with ipad */ unsigned char k_opad[65]; /* outer padding * key XORd with opad */ unsigned char tk[16]; int i; /* if key is longer than 64 bytes reset it to key=MD5(key) */ if (key_len > 64) { MD5_CTX tctx; MD5Init(&tctx); MD5Update(&tctx, key, key_len); MD5Final(tk, &tctx); key = tk; key_len = 16; } /* * the HMAC_MD5 transform looks like: * * MD5(K XOR opad, MD5(K XOR ipad, text)) * * where K is an n byte key * ipad is the byte 0x36 repeated 64 times Krawczyk, et. al. Informational [Page 8]</code>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<code><loc_65><loc_47><loc_417><loc_268><_unknown_>* opad is the byte 0x5c repeated 64 times * and text is the data being protected */ /* start out by storing key in pads */ bzero( k_ipad, sizeof k_ipad); bzero( k_opad, sizeof k_opad); bcopy( key, k_ipad, key_len); bcopy( key, k_opad, key_len); /* XOR key with ipad and opad values */ for (i=0; i<64; i++) { k_ipad[i] ^= 0x36; k_opad[i] ^= 0x5c; } /* * perform inner MD5 */ MD5Init(&context); /* init context for 1st * pass */ MD5Update(&context, k_ipad, 64) /* start with inner pad */ MD5Update(&context, text, text_len); /* then text of datagram */ MD5Final(digest, &context); /* finish up 1st pass */ /* * perform outer MD5 */ MD5Init(&context); /* init context for 2nd * pass */ MD5Update(&context, k_opad, 64); /* start with outer pad */ MD5Update(&context, digest, 16); /* then results of 1st * hash */ MD5Final(digest, &context); /* finish up 2nd pass */</code>
+<text><loc_67><loc_269><loc_69><loc_274>}</text>
+<text><loc_66><loc_283><loc_416><loc_288>Test Vectors (Trailing ’\0’ of a character string not included in test):</text>
+<text><loc_65><loc_297><loc_310><loc_302>key = 0x0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b</text>
+<text><loc_65><loc_304><loc_182><loc_310>key_len = 16 bytes</text>
+<text><loc_65><loc_311><loc_192><loc_315>data = "Hi There"</text>
+<text><loc_65><loc_318><loc_182><loc_324>data_len = 8 bytes</text>
+<text><loc_65><loc_325><loc_310><loc_330>digest = 0x9294727a3638bb1c13f48ef8158bfc9d</text>
+<text><loc_76><loc_339><loc_172><loc_344>key = "Jefe"</text>
+<text><loc_76><loc_346><loc_290><loc_351>data = "what do ya want for nothing?"</text>
+<text><loc_76><loc_353><loc_182><loc_358>data_len = 28 bytes</text>
+<text><loc_76><loc_360><loc_310><loc_365>digest = 0x750c783e6ab0b503eaa86e310a5db738</text>
+<text><loc_76><loc_374><loc_310><loc_379>key = 0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 9]</text>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<text><loc_65><loc_47><loc_182><loc_53>key_len 16 bytes</text>
+<text><loc_65><loc_54><loc_265><loc_58>data = 0xDDDDDDDDDDDDDDDDDDDD...</text>
+<text><loc_65><loc_61><loc_265><loc_65>..DDDDDDDDDDDDDDDDDDDD...</text>
+<text><loc_65><loc_68><loc_265><loc_72>..DDDDDDDDDDDDDDDDDDDD...</text>
+<text><loc_65><loc_75><loc_265><loc_79>..DDDDDDDDDDDDDDDDDDDD...</text>
+<text><loc_65><loc_82><loc_251><loc_86>..DDDDDDDDDDDDDDDDDDDD</text>
+<text><loc_65><loc_89><loc_182><loc_95>data_len = 50 bytes</text>
+<text><loc_65><loc_96><loc_310><loc_101>digest = 0x56be34521d144c88dbb8c733f0e8b3f6</text>
+<section_header_level_1><loc_65><loc_110><loc_138><loc_115>Acknowledgments</section_header_level_1>
+<text><loc_65><loc_124><loc_408><loc_170>Pau-Chen Cheng, Jeff Kraemer, and Michael Oehler, have provided useful comments on early drafts, and ran the first interoperability tests of this specification. Jeff and Pau-Chen kindly provided the sample code and test vectors that appear in the appendix. Burt Kaliski, Bart Preneel, Matt Robshaw, Adi Shamir, and Paul van Oorschot have provided useful comments and suggestions during the investigation of the HMAC construction.</text>
+<section_header_level_1><loc_66><loc_179><loc_114><loc_183>References</section_header_level_1>
+<text><loc_65><loc_193><loc_398><loc_212>[ANSI] ANSI X9.9, "American National Standard for Financial Institution Message Authentication (Wholesale)," American Bankers Association, 1981. Revised 1986.</text>
+<unordered_list><list_item><loc_65><loc_221><loc_403><loc_232>[Atk] Atkinson, R., "IP Authentication Header", RFC 1826, August 1995.</list_item>
+<list_item><loc_65><loc_242><loc_377><loc_268>[BCK1] M. Bellare, R. Canetti, and H. Krawczyk, "Keyed Hash Functions and Message Authentication", Proceedings of Crypto'96, LNCS 1109, pp. 1-15. (http://www.research.ibm.com/security/keyed-md5.html)</list_item>
+<list_item><loc_65><loc_276><loc_416><loc_295>[BCK2] M. Bellare, R. Canetti, and H. Krawczyk, "Pseudorandom Functions Revisited: The Cascade Construction", Proceedings of FOCS'96.</list_item>
+<list_item><loc_65><loc_304><loc_397><loc_323>[Dobb] H. Dobbertin, "The Status of MD5 After a Recent Attack", RSA Labs' CryptoBytes, Vol. 2 No. 2, Summer 1996. http://www.rsa.com/rsalabs/pubs/cryptobytes.html</list_item>
+<list_item><loc_65><loc_332><loc_418><loc_358>[PV] B. Preneel and P. van Oorschot, "Building fast MACs from hash functions", Advances in Cryptology -- CRYPTO'95 Proceedings, Lecture Notes in Computer Science, Springer-Verlag Vol.963, 1995, pp. 1-14.</list_item>
+<list_item><loc_82><loc_367><loc_348><loc_379>[MD5] Rivest, R., "The MD5 Message-Digest Algorithm", RFC 1321, April 1992.</list_item>
+</unordered_list>
+<code><loc_66><loc_401><loc_416><loc_406><_unknown_>Krawczyk, et. al. Informational [Page 10]</code>
+<page_break>
+<text><loc_66><loc_26><loc_417><loc_31>RFC 2104 HMAC February 1997</text>
+<unordered_list><list_item><loc_65><loc_47><loc_397><loc_58>[MM] Meyer, S. and Matyas, S.M., Cryptography, New York Wiley, 1982.</list_item>
+<list_item><loc_65><loc_68><loc_413><loc_94>[RIPEMD] H. Dobbertin, A. Bosselaers, and B. Preneel, "RIPEMD-160: A strengthened version of RIPEMD", Fast Software Encryption, LNCS Vol 1039, pp. 71-82. ftp://ftp.esat.kuleuven.ac.be/pub/COSIC/bosselae/ripemd/.</list_item>
+<list_item><loc_65><loc_103><loc_387><loc_108>[SHA] NIST, FIPS PUB 180-1: Secure Hash Standard, April 1995.</list_item>
+<list_item><loc_65><loc_117><loc_411><loc_150>[Tsu] G. Tsudik, "Message authentication with one-way hash functions", In Proceedings of Infocom'92, May 1992. (Also in "Access Control and Policy Enforcement in Internetworks", Ph.D. Dissertation, Computer Science Department, University of Southern California, April 1991.)</list_item>
+<list_item><loc_65><loc_158><loc_403><loc_184>[VW] P. van Oorschot and M. Wiener, "Parallel Collision Search with Applications to Hash Functions and Discrete Logarithms", Proceedings of the 2nd ACM Conf. Computer and Communications Security, Fairfax, VA, November 1994.</list_item>
+</unordered_list>
+<section_header_level_1><loc_65><loc_193><loc_153><loc_197>Authors’ Addresses</section_header_level_1>
+<text><loc_65><loc_207><loc_232><loc_233>Hugo Krawczyk IBM T.J. Watson Research Center P.O.Box 704 Yorktown Heights, NY 10598</text>
+<text><loc_65><loc_242><loc_207><loc_247>EMail: hugo@watson.ibm.com</text>
+<text><loc_65><loc_255><loc_276><loc_295>Mihir Bellare Dept of Computer Science and Engineering Mail Code 0114 University of California at San Diego 9500 Gilman Drive La Jolla, CA 92093</text>
+<text><loc_65><loc_304><loc_197><loc_308>EMail: mihir@cs.ucsd.edu</text>
+<text><loc_65><loc_318><loc_232><loc_344>Ran Canetti IBM T.J. Watson Research Center P.O.Box 704 Yorktown Heights, NY 10598</text>
+<text><loc_80><loc_353><loc_222><loc_357>EMail: canetti@watson.ibm.com</text>
+<text><loc_66><loc_401><loc_416><loc_406>Krawczyk, et. al. Informational [Page 11]</text>
+</doctag>
