@@ -171,7 +171,8 @@ with st.sidebar:
         if "builtin::rag" in toolgroup_selection:
             vector_dbs = chatClient.vector_dbs.list() or []
             if not vector_dbs:
-                st.info("No vector databases available for selection.")
+                st.info("No vector databases available for selection. Create one using the Embedding Page.")
+                selected_vector_dbs = []
             else:
                 vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
                 selected_vector_dbs = st.multiselect(
