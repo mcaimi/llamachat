@@ -157,7 +157,7 @@ tool_groups:
   provider_id: rag-runtime
 - toolgroup_id: builtin::websearch
   provider_id: bing-search
-- toolgroup_id: mcp::utilities
+- toolgroup_id: mcp::tools
   provider_id: model-context-protocol
   mcp_endpoint:
     uri: "http://localhost:8000/sse"

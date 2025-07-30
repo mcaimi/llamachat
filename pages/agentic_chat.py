@@ -132,10 +132,7 @@ with st.sidebar:
 
         # MCP Servers comes first now
         mcp_label_map = {
-            "mcp::sql": "SQL Interface",
-            "mcp::pdf": "Document generator",
-            "mcp::slack": "Slack integration",
-            "mcp::telegram": "Telegram Integration",
+            "mcp::tools": "MCP Tools",
             "mcp::opencv": "OpenCV Toolkit",
         }
         mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
