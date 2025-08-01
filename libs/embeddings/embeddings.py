@@ -87,16 +87,30 @@ def chunkFiles(converted_docs: list) -> list:
         for doc in converted_docs:
             chunks = list(chunker.chunk(dl_doc=doc["doc"].document))
             for i, chunk in enumerate(chunks):
-                metadata = doc["metadata"]
+                # contextualize chunk for content storage
+                chunk_content = chunker.contextualize(chunk=chunk)
+                # fill metadata
+                metadata = {
+                    "name": chunk.meta.origin.filename,
+                    "uri": chunk.meta.origin.uri,
+                    "headings": chunk.meta.headings,
+                    "captions": chunk.meta.captions,
+                    "mimetype": chunk.meta.origin.mimetype,
+                    "document_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}",
+                    "chunk_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}_chunk_{i}"
+                }
+                # fill chunk metadata
+                chunk_metadata = {
+                    "document_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}",
+                    "chunk_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}_chunk_{i}",
+                    "source": metadata.get('url') or metadata.get("name"),
+                }
 
-                # append chunk id
-                metadata["chunk_id"] = f"{metadata["document_id"]}_chunk_id_{i}"
-                
+                # append chunk to doc list                
                 docs.append({
-                    "content": chunker.contextualize(chunk=chunk),
-                    "mime_type": metadata.get("mimetype"),
+                    "content": chunk_content,
                     "metadata": metadata,
-                    "chunk_metadata": metadata,
+                    "chunk_metadata": chunk_metadata,
                 })
     
     # return docs

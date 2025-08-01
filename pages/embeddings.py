@@ -107,6 +107,7 @@ if uploaded_files:
 
         # create new collection if necessary
         vector_dbs = embedClient.vector_dbs.list() or []
+        
         if len(vector_dbs) == 0 or vector_db_id not in [v.identifier for v in vector_dbs]:
             # create vector db on provider
             st.markdown(f"**Creating new Collection {vector_db_id} on the vdb...**")
