@@ -1,4 +1,4 @@
 streamlit
 python-dotenv
-llama-stack-client
+llama-stack-client==0.2.15
 docling
