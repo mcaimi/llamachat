@@ -27,13 +27,6 @@ appSettings = Properties(config_file=config_filename)
 
 # MAIN
 if __name__ == "__main__":
-    # nice logo
-    with st.sidebar:
-        if os.path.exists("assets/llama.png"):
-            st.image("assets/llama.png", use_container_width=False, width=200)
-        else:
-            st.warning("⚠️ 'assets/llama.png' not found. Make sure it's in the assets directory.")
-
     # define app pages
     if appSettings.config_parameters.interface.agentic:
         agentic_page = st.Page("pages/agentic_chat.py", title="Agentic AI Chat", icon=":material/chat:")
