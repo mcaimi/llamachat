@@ -12,7 +12,6 @@ docling
 numpy
 torch
 torchcodec
-torchaudio
 transformers
 
 # hugging face hub

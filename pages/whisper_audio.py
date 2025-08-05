@@ -12,7 +12,7 @@ try:
     from dotenv import dotenv_values
 
     with st.spinner("** LOADING TORCH AND TRANSFORMERS... **"):
-        import torchaudio as ta
+        from torchcodec.decoders import AudioDecoder
         import numpy as np
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
@@ -24,6 +24,10 @@ try:
         from libs.shared.utils import detect_accelerator
 except Exception as e:
     print(f"Caught fatal exception: {e}")
+
+# whisper inference settings
+INFERENCE_SAMPLE_RATE=16_000
+INFERENCE_CHANNELS=1
 
 # load environment
 config_env: dict = dotenv_values(".env")
@@ -106,17 +110,18 @@ if uploaded_files:
     audio_data.subheader("File Properties")
     parameters.subheader("Generation Parameters")
  
-    with st.spinner("** Input Analysis... **"):
+    with st.spinner("** Load Samples from File... **"):
         # fetch file info
-        clipInfo = ta.info(uploaded_files)
+        decodedAudioFile = AudioDecoder(uploaded_files, sample_rate=INFERENCE_SAMPLE_RATE, num_channels=INFERENCE_CHANNELS)
+        metadata = decodedAudioFile.metadata
         clipInfoJson = {
                 "name": uploaded_files.name,
-                "channels": clipInfo.num_channels, 
-                "samples": clipInfo.num_frames,
-                "duration": float(clipInfo.num_frames/clipInfo.sample_rate), 
+                "channels": metadata.num_channels, 
+                "samples": metadata.sample_rate * metadata.duration_seconds_from_header,
+                "duration": metadata.duration_seconds_from_header, 
                 "encoding": {
-                    "format": clipInfo.encoding, "sample_rate": clipInfo.sample_rate,
-                    "bits_per_sample": clipInfo.bits_per_sample
+                    "format": metadata.codec, "sample_rate": metadata.sample_rate,
+                    "bitrate": metadata.bit_rate
                     }
                 }
     
@@ -151,23 +156,20 @@ if uploaded_files:
 
     # load samples
     with st.spinner("** Load Samples... **"):
-        audio_samples, sample_rate = ta.load(uploaded_files.getvalue())
-        if sample_rate > 16000:
-            # resample
-            resampler = ta.transforms.Resample(sample_rate, 16000)
-            audio_samples = resampler(audio_samples)
+        audio_samples = decodedAudioFile.get_all_samples()
         
         # display info
         samplesJson = {
-            "sample_rate": 16000,
+            "sample_rate": audio_samples.sample_rate,
             "data": {
-                "channels": audio_samples.shape[0],
-                "samples": audio_samples.shape[1]
+                "duration_s": audio_samples.duration_seconds,
+                "samples": audio_samples.data.shape[1],
+                "channels": audio_samples.data.shape[0]
             },
             "inference": generate_kwargs
         }
         transcribe_button.subheader("Preview")
-        transcribe_button.audio(audio_samples.numpy(), sample_rate=16000)
+        transcribe_button.audio(audio_samples.data.numpy(), sample_rate=INFERENCE_SAMPLE_RATE)
         transcribe_button.subheader("Analysis Format")
         transcribe_button.json(samplesJson)
 
@@ -182,10 +184,16 @@ if uploaded_files:
             # transcribe
             with st.spinner("** TRANSCRIBING AUDIO, PLEASE WAIT ... **"):
                 # tensor to numpy..
-                samples_array = audio_samples.squeeze().numpy()
+                samples_array = audio_samples.data.squeeze().numpy()
                 prediction = whisperPipeline(samples_array, return_timestamps=return_timestamps, generate_kwargs=generate_kwargs)
 
             # convert to text
-            st.success(prediction.get("text"))
-            with st.expander("Timeline"):
-                st.json(prediction.get("chunks"))
+            transcribed_text, download_button = st.columns([3,1])
+            transcribed_text.subheader("Transcription")
+            transcribed_text.markdown(prediction.get("text"))
+            if return_timestamps:
+                with transcribed_text.expander("Timeline"):
+                    transcribed_text.json(prediction.get("chunks"))
+
+            # download button
+            download_button.download_button(label='Download Transctription', data=prediction.get("text"), mime="plain/text", icon=":material/download:")
