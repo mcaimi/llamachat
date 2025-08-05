@@ -3,3 +3,4 @@
 .vscode
 chat_histories
 .venv
+_test*
