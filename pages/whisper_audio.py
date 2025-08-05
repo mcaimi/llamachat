@@ -1,0 +1,191 @@
+#!/usr/bin/env python
+#
+# Whisper Integration: Audio To Text support
+# *EXPERIMENTAL*
+#
+
+import os
+import io
+
+try:
+    import streamlit as st
+    from dotenv import dotenv_values
+
+    with st.spinner("** LOADING TORCH AND TRANSFORMERS... **"):
+        import torchaudio as ta
+        import numpy as np
+        from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+
+    with st.spinner("** LOADING INTERFACE... **"):
+        # local imports
+        import libs.shared.huggingface as hf
+        from libs.shared.settings import Properties
+        from libs.shared.session import Session
+        from libs.shared.utils import detect_accelerator
+except Exception as e:
+    print(f"Caught fatal exception: {e}")
+
+# load environment
+config_env: dict = dotenv_values(".env")
+
+# load app settings
+config_filename: str = config_env.get("CONFIG_FILE", "parameters.yaml")
+appSettings = Properties(config_file=config_filename)
+
+# initialize streamlit session
+stSession = Session(st.session_state)
+
+# build streamlit UI
+st.set_page_config(page_title="🧠 RedHat Agentic AI Assistant", initial_sidebar_state="collapsed", layout="wide")
+st.html("assets/whisper.html")
+
+# detect acceleration device
+device, dtype = detect_accelerator()
+
+# whisper model
+model = appSettings.config_parameters.whisper.model
+
+@st.cache_resource
+def loadWhisperModel(low_vram: bool, device: str) -> pipeline:
+    with st.spinner("**Loading model into memory...**"):
+        model = AutoModelForSpeechSeq2Seq.from_pretrained(
+            mp, device_map="auto",
+            torch_dtype=dtype,
+            low_cpu_mem_usage=low_vram, use_safetensors=True)
+        model.to(device)
+        processor = AutoProcessor.from_pretrained(mp, device_map="auto", use_safetensors=True)
+
+        pipe = pipeline(
+            "automatic-speech-recognition",
+            model=model,
+            tokenizer=processor.tokenizer,
+            feature_extractor=processor.feature_extractor,
+            torch_dtype=dtype,
+        )
+    return pipe
+
+# populate sidebar options
+with st.sidebar:
+    # reset function
+    def reset_agent():
+        st.cache_resource.clear()
+
+    st.header("🛠 Whisper Control Panel")
+
+    st.markdown(f"**Model: `{model}`**")
+    st.markdown(f"**Device: `{device}/{dtype}`**")
+
+    with st.expander("Options"):
+        low_vram = st.checkbox("Use low VRAM Settings", value=True, on_change=reset_agent)
+
+# file uploader
+with st.spinner("** GETTING WHISPER MODEL FROM HUGGINGFACE... **"):
+    try:
+        # download model from huggingface
+        mp = hf.downloadFromHuggingFace(repo_id=appSettings.config_parameters.whisper.model,
+                                    local_dir=appSettings.config_parameters.huggingface.local_dir,
+                                    cache_dir=appSettings.config_parameters.huggingface.cache_dir,
+                                    apitoken=appSettings.config_parameters.huggingface.apitoken,
+                                    revision=appSettings.config_parameters.whisper.revision)
+    except Exception as e:
+        st.markdown(f"🚨 Error downloading model from HuggingFace: {e}")
+
+st.subheader("Upload an Audio File", divider=True)
+uploaded_files = st.file_uploader(
+            "Upload file(s) or directory",
+            accept_multiple_files=False,
+            type=appSettings.config_parameters.features.supported_audio_formats,  # Add more file types as needed
+)
+
+# ok, check if we got files...
+if uploaded_files:
+    st.success(f"Upload Successful: {uploaded_files.name}.")
+
+    # input columns
+    audio_data, parameters, transcribe_button = st.columns([1,3,1], vertical_alignment="top")
+    audio_data.subheader("File Properties")
+    parameters.subheader("Generation Parameters")
+ 
+    with st.spinner("** Input Analysis... **"):
+        # fetch file info
+        clipInfo = ta.info(uploaded_files)
+        clipInfoJson = {
+                "name": uploaded_files.name,
+                "channels": clipInfo.num_channels, 
+                "samples": clipInfo.num_frames,
+                "duration": float(clipInfo.num_frames/clipInfo.sample_rate), 
+                "encoding": {
+                    "format": clipInfo.encoding, "sample_rate": clipInfo.sample_rate,
+                    "bits_per_sample": clipInfo.bits_per_sample
+                    }
+                }
+    
+    # display info
+    audio_data.json(clipInfoJson)
+
+    # add supported language options
+    supported_languages = ["English", "German", "French", "Italian", "Spanish"]
+    audio_language = parameters.segmented_control(
+        "Source Language", supported_languages, selection_mode="single", default="English",
+        on_change=reset_agent, key="audio_language"
+    )
+    task = parameters.selectbox("Task", ("Transcribe", "Translate"), index=0)
+    if task == "Translate":
+        target_language = parameters.segmented_control(
+        "Target Language", supported_languages, selection_mode="single", default="English",
+        on_change=reset_agent, key="target_language"
+    )
+
+    # return timestamps if len(audio)>30s
+    if clipInfoJson.get("duration") > 30.0:
+        return_timestamps=parameters.checkbox("Return Timestamps", value=True)
+    else:
+        return_timestamps=parameters.checkbox("Return Timestamps", value=False)
+
+    # inference parameters
+    generate_kwargs = {
+        "language": audio_language,
+        "task": task.lower(),
+        "return_timestamps": bool(return_timestamps)
+    }
+
+    # load samples
+    with st.spinner("** Load Samples... **"):
+        audio_samples, sample_rate = ta.load(uploaded_files.getvalue())
+        if sample_rate > 16000:
+            # resample
+            resampler = ta.transforms.Resample(sample_rate, 16000)
+            audio_samples = resampler(audio_samples)
+        
+        # display info
+        samplesJson = {
+            "sample_rate": 16000,
+            "data": {
+                "channels": audio_samples.shape[0],
+                "samples": audio_samples.shape[1]
+            },
+            "inference": generate_kwargs
+        }
+        transcribe_button.subheader("Preview")
+        transcribe_button.audio(audio_samples.numpy(), sample_rate=16000)
+        transcribe_button.subheader("Analysis Format")
+        transcribe_button.json(samplesJson)
+
+    # load model
+    whisperPipeline = loadWhisperModel(low_vram=low_vram, device=device)
+
+    # begin conversion
+    if samplesJson.get("data").get("channels") > 1:
+        st.error("Stereo audio is not supported yet. Please use mono audio.")
+    else:
+        if transcribe_button.button("Transcribe Audio..."):
+            # transcribe
+            with st.spinner("** TRANSCRIBING AUDIO, PLEASE WAIT ... **"):
+                # tensor to numpy..
+                samples_array = audio_samples.squeeze().numpy()
+                prediction = whisperPipeline(samples_array, return_timestamps=return_timestamps, generate_kwargs=generate_kwargs)
+
+            # convert to text
+            st.success(prediction.get("text"))
+            with st.expander("Timeline"):
+                st.json(prediction.get("chunks"))

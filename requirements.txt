@@ -1,4 +1,19 @@
-streamlit
+# env support
 python-dotenv
+
+# streamlit
+streamlit
+
+# llama-stack & embeddings
 llama-stack-client==0.2.15
 docling
+
+# for local whisper support
+numpy
+torch
+torchcodec
+torchaudio
+transformers
+
+# hugging face hub
+huggingface_hub
