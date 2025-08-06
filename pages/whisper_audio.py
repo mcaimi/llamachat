@@ -10,6 +10,7 @@ import io
 try:
     import streamlit as st
     from dotenv import dotenv_values
+    from threading import RLock
 
     with st.spinner("** LOADING TORCH AND TRANSFORMERS... **"):
         from torchcodec.decoders import AudioDecoder
@@ -22,6 +23,7 @@ try:
         from libs.shared.settings import Properties
         from libs.shared.session import Session
         from libs.shared.utils import detect_accelerator
+        from libs.utils.audio_pipelines import waveform
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
@@ -48,6 +50,9 @@ device, dtype = detect_accelerator()
 
 # whisper model
 model = appSettings.config_parameters.whisper.model
+
+# pyplot lock
+_pyplot_lock = RLock()
 
 @st.cache_resource
 def loadWhisperModel(low_vram: bool, device: str) -> pipeline:
@@ -106,7 +111,7 @@ if uploaded_files:
     st.success(f"Upload Successful: {uploaded_files.name}.")
 
     # input columns
-    audio_data, parameters, transcribe_button = st.columns([1,3,1], vertical_alignment="top")
+    audio_data, parameters = st.columns([2,2], vertical_alignment="top")
     audio_data.subheader("File Properties")
     parameters.subheader("Generation Parameters")
  
@@ -168,10 +173,16 @@ if uploaded_files:
             },
             "inference": generate_kwargs
         }
-        transcribe_button.subheader("Preview")
-        transcribe_button.audio(audio_samples.data.numpy(), sample_rate=INFERENCE_SAMPLE_RATE)
-        transcribe_button.subheader("Analysis Format")
-        transcribe_button.json(samplesJson)
+
+    with st.expander("Clip Information", expanded=False):
+        wavepanel, infopanel = st.columns([2,1])
+        wavepanel.subheader("Waveform & Spectrum")
+        with _pyplot_lock:
+            wavepanel.pyplot(waveform(decodedAudioFile))
+        infopanel.subheader("Preview")
+        infopanel.audio(audio_samples.data.numpy(), sample_rate=INFERENCE_SAMPLE_RATE)
+        infopanel.subheader("Converted For Inference")
+        infopanel.json(samplesJson)
 
     # load model
     whisperPipeline = loadWhisperModel(low_vram=low_vram, device=device)
@@ -180,7 +191,7 @@ if uploaded_files:
     if samplesJson.get("data").get("channels") > 1:
         st.error("Stereo audio is not supported yet. Please use mono audio.")
     else:
-        if transcribe_button.button("Transcribe Audio..."):
+        if parameters.button("Transcribe Audio..."):
             # transcribe
             with st.spinner("** TRANSCRIBING AUDIO, PLEASE WAIT ... **"):
                 # tensor to numpy..
