@@ -3,6 +3,7 @@ python-dotenv
 
 # streamlit
 streamlit
+matplotlib
 
 # llama-stack & embeddings
 llama-stack-client==0.2.15
