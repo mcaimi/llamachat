@@ -16,6 +16,7 @@ try:
         from torchcodec.decoders import AudioDecoder
         import numpy as np
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+        import matplotlib.pyplot as plt
 
     with st.spinner("** LOADING INTERFACE... **"):
         # local imports
@@ -23,7 +24,7 @@ try:
         from libs.shared.settings import Properties
         from libs.shared.session import Session
         from libs.shared.utils import detect_accelerator
-        from libs.utils.audio_pipelines import waveform
+        from libs.utils.audio_pipelines import resample, waveform, spectrum
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
@@ -117,7 +118,7 @@ if uploaded_files:
  
     with st.spinner("** Load Samples from File... **"):
         # fetch file info
-        decodedAudioFile = AudioDecoder(uploaded_files, sample_rate=INFERENCE_SAMPLE_RATE, num_channels=INFERENCE_CHANNELS)
+        decodedAudioFile = AudioDecoder(uploaded_files)
         metadata = decodedAudioFile.metadata
         clipInfoJson = {
                 "name": uploaded_files.name,
@@ -161,7 +162,9 @@ if uploaded_files:
 
     # load samples
     with st.spinner("** Load Samples... **"):
-        audio_samples = decodedAudioFile.get_all_samples()
+        audio_samples = resample(decodedAudioFile,
+                                target_sample_rate=INFERENCE_SAMPLE_RATE,
+                                target_num_channels=INFERENCE_CHANNELS).get_all_samples()
         
         # display info
         samplesJson = {
@@ -178,7 +181,11 @@ if uploaded_files:
         wavepanel, infopanel = st.columns([2,1])
         wavepanel.subheader("Waveform & Spectrum")
         with _pyplot_lock:
-            wavepanel.pyplot(waveform(decodedAudioFile))
+            plt.subplots(2,1)
+            spec, _ = spectrum(decodedAudioFile)
+            wave, _ = waveform(decodedAudioFile)
+            wavepanel.pyplot(spec)
+            wavepanel.pyplot(wave)
         infopanel.subheader("Preview")
         infopanel.audio(audio_samples.data.numpy(), sample_rate=INFERENCE_SAMPLE_RATE)
         infopanel.subheader("Converted For Inference")
