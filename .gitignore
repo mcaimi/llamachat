@@ -5,3 +5,4 @@ chat_histories
 .venv
 _test*
 *.MP3
+.DS_Store
