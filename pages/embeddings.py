@@ -78,7 +78,7 @@ if uploaded_files:
             case "Docling Pipeline v4":
                 pdf_backend = DoclingParseV4DocumentBackend
 
-    if st.button("Convert And Embed Documents...."):
+    if st.button("Convert And Embed Documents....", type="primary"):
         # documents to embed:
         converted_docs = []
         rag_docs = []

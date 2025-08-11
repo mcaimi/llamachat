@@ -42,8 +42,6 @@ appSettings = Properties(config_file=config_filename)
 # initialize streamlit session
 stSession = Session(st.session_state)
 
-# initialize streamlit session
-stSession = Session(st.session_state)
 # setup default values from config file
 stSession.add_to_session_state("api_base_url", appSettings.config_parameters.openai.default_local_api)
 stSession.add_to_session_state("system_prompt", appSettings.config_parameters.llm.system_prompt)

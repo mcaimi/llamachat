@@ -31,7 +31,8 @@ if __name__ == "__main__":
     if appSettings.config_parameters.interface.agentic:
         agentic_page = st.Page("pages/agentic_chat.py", title="Agentic AI Chat", icon=":material/chat:")
         embeddings_page = st.Page("pages/embeddings.py", title="Manage Embeddings", icon=":material/search:")
-        enabled_sections = [agentic_page, embeddings_page]
+        audio_page = st.Page("pages/whisper_audio.py", title="Audio to Text", icon=":material/speaker:")
+        enabled_sections = [agentic_page, embeddings_page, audio_page]
     else:
         ai_chat_page = st.Page("pages/ai_chat.py", title="AI Chat with RAG", icon=":material/chat:")
         embeddings_page = st.Page("pages/embeddings.py", title="Manage Embeddings", icon=":material/search:")

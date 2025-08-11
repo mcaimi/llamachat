@@ -23,11 +23,26 @@ openai:
   api_key: "your_api_key"
   timeout: 120
 
+whisper:
+  model: "Whisper Tiny"
+  supported_models:
+    "Whisper Large": "openai/whisper-large-v3"
+    "Whisper Medium": "openai/whisper-medium"
+    "Whisper Small": "openai/whisper-small"
+    "Whisper Tiny": "openai/whisper-tiny"
+  revision: "main"
+
+huggingface:
+  apitoken: "your_api_token"
+  local_dir: "/tmp/cache/huggingface/local_repo"
+  cache_dir: "/tmp/cache/huggingface"
+
 features:
   enable_rag: True
   enable_shields: False
   supported_data_formats: ["pdf", "xlsx", "docx", "md", "html"]
   supported_img_formats: ["jpg", "png"]
+  supported_audio_formats: ["mp3", "wav"]
 
 llm:
   temperature: 0.8
