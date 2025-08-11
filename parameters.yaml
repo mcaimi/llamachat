@@ -24,7 +24,12 @@ openai:
   timeout: 120
 
 whisper:
-  model: "openai/whisper-large-v3"
+  model: "Whisper Tiny"
+  supported_models:
+    "Whisper Large": "openai/whisper-large-v3"
+    "Whisper Medium": "openai/whisper-medium"
+    "Whisper Small": "openai/whisper-small"
+    "Whisper Tiny": "openai/whisper-tiny"
   revision: "main"
 
 huggingface:

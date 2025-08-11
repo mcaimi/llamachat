@@ -50,6 +50,7 @@ st.html("assets/whisper.html")
 device, dtype = detect_accelerator()
 
 # whisper model
+supported_models = appSettings.config_parameters.data.get("whisper").get("supported_models")
 model = appSettings.config_parameters.whisper.model
 
 # pyplot lock
@@ -62,7 +63,7 @@ def loadWhisperModel(low_vram: bool, device: str) -> pipeline:
             mp, device_map="auto",
             torch_dtype=dtype,
             low_cpu_mem_usage=low_vram, use_safetensors=True)
-        model.to(device)
+        #model.to(device)
         processor = AutoProcessor.from_pretrained(mp, device_map="auto", use_safetensors=True)
 
         pipe = pipeline(
@@ -82,7 +83,10 @@ with st.sidebar:
 
     st.header("🛠 Whisper Control Panel")
 
-    st.markdown(f"**Model: `{model}`**")
+    st.markdown("** Model Selection **")
+    selected_model = st.selectbox(label="Select Whisper Model", options=supported_models.keys(), index=[i for i,x in enumerate(supported_models.keys()) if x == model].pop(), on_change=reset_agent)
+
+    st.markdown(f"**Model: `{selected_model}`**")
     st.markdown(f"**Device: `{device}/{dtype}`**")
 
     with st.expander("Options"):
@@ -92,7 +96,7 @@ with st.sidebar:
 with st.spinner("** GETTING WHISPER MODEL FROM HUGGINGFACE... **"):
     try:
         # download model from huggingface
-        mp = hf.downloadFromHuggingFace(repo_id=appSettings.config_parameters.whisper.model,
+        mp = hf.downloadFromHuggingFace(repo_id=supported_models.get(selected_model),
                                     local_dir=appSettings.config_parameters.huggingface.local_dir,
                                     cache_dir=appSettings.config_parameters.huggingface.cache_dir,
                                     apitoken=appSettings.config_parameters.huggingface.apitoken,
