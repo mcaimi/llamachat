@@ -1,0 +1,20 @@
+[project]
+name = "llamachat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docling==2.43.0",
+    "huggingface-hub>=0.34.4",
+    "llama-stack-client==0.2.15",
+    "matplotlib>=3.10.5",
+    "numpy>=2.3.2",
+    "python-dotenv>=1.1.1",
+    "streamlit>=1.48.0",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchcodec==0.6.0",
+    "torchvision==0.23.0",
+    "transformers>=4.55.0",
+]
