@@ -178,14 +178,15 @@ if uploaded_files:
         }
 
     with st.expander("Clip Information", expanded=False):
-        wavepanel, infopanel = st.columns([2,1])
-        wavepanel.subheader("Waveform & Spectrum")
+        wavepanel, spectrumpanel, infopanel = st.columns([1,1,1])
+        wavepanel.subheader("Waveform")
+        spectrumpanel.subheader("Spectrum")
         with _pyplot_lock:
             plt.subplots(2,1)
             spec, _ = spectrum(decodedAudioFile)
             wave, _ = waveform(decodedAudioFile)
-            wavepanel.pyplot(spec)
             wavepanel.pyplot(wave)
+            spectrumpanel.pyplot(spec)
         infopanel.subheader("Preview")
         infopanel.audio(audio_samples.data.numpy(), sample_rate=INFERENCE_SAMPLE_RATE)
         infopanel.subheader("Converted For Inference")
@@ -198,20 +199,24 @@ if uploaded_files:
     if samplesJson.get("data").get("channels") > 1:
         st.error("Stereo audio is not supported yet. Please use mono audio.")
     else:
-        if parameters.button("Transcribe Audio..."):
+        if parameters.button("Transcribe Audio...", type="primary"):
             # transcribe
             with st.spinner("** TRANSCRIBING AUDIO, PLEASE WAIT ... **"):
                 # tensor to numpy..
                 samples_array = audio_samples.data.squeeze().numpy()
                 prediction = whisperPipeline(samples_array, return_timestamps=return_timestamps, generate_kwargs=generate_kwargs)
 
-            # convert to text
-            transcribed_text, download_button = st.columns([3,1])
-            transcribed_text.subheader("Transcription")
-            transcribed_text.markdown(prediction.get("text"))
-            if return_timestamps:
-                with transcribed_text.expander("Timeline"):
-                    transcribed_text.json(prediction.get("chunks"))
+            # finished
+            st.badge("Success", icon=":material/check:", color="green")
 
-            # download button
-            download_button.download_button(label='Download Transctription', data=prediction.get("text"), mime="plain/text", icon=":material/download:")
+            with st.container(border=True):
+                st.subheader("Process Output", divider=True)
+                transcribed_text, download_button = st.columns([3,1])
+                transcribed_text.subheader("Transcription")
+                transcribed_text.markdown(prediction.get("text"))
+                if return_timestamps:
+                    with transcribed_text.expander("Timeline"):
+                        transcribed_text.json(prediction.get("chunks"))
+
+                # download button
+                download_button.download_button(label='Download Transctription', type="primary", data=prediction.get("text"), mime="plain/text", icon=":material/download:")
