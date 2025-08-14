@@ -40,7 +40,7 @@ if __name__ == "__main__":
         enabled_sections = [ai_chat_page, embeddings_page, settings_page]
 
     # setup application main page
-    st.logo("assets/redhat.bmp")
+    st.logo("assets/redhat.png")
     pg = st.navigation(enabled_sections)
     st.set_page_config(page_title="Red Hat Opensource AI", page_icon=":material/edit:")
 
