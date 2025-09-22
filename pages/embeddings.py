@@ -156,7 +156,10 @@ if uploaded_files:
         if len(rag_docs) > 0:
             # embed documents
             with st.spinner("**Embedding...**"):
-                embedClient.vector_io.insert(vector_db_id=vector_db_id, chunks=rag_docs)
+                for doc in rag_docs:
+                    embedClient.vector_io.insert(
+                        vector_db_id=vector_db_id, chunks=[doc]
+                    )
 
             st.markdown("**Embedding Done**")
 
