@@ -8,7 +8,7 @@ dependencies = [
     "docling==2.43.0",
     "ffmpeg>=1.4",
     "huggingface-hub>=0.34.4",
-    "llama-stack-client==0.2.15",
+    "llama-stack-client==0.2.23",
     "matplotlib>=3.10.5",
     "numpy>=2.3.2",
     "pdfplumber>=0.11.7",
