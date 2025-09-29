@@ -388,7 +388,6 @@ def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
                 enable_session_persistence=enable_persistence,
             )
 
-
 chatAgent = instantiate_ai_agent(
     stSession.session_state.model_name,
     stSession.session_state.system_prompt,

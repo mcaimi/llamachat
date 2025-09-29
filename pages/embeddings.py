@@ -73,7 +73,7 @@ if uploaded_files:
         if not vector_dbs:
             st.info("No vector databases available for selection.")
         else:
-            vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+            vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
             vector_db_name = st.multiselect(
                 label="Select Document Collections to use in RAG embeddings",
                 options=vector_dbs,
@@ -133,21 +133,21 @@ if uploaded_files:
 
         # embed documents!
         if isinstance(vector_db_name, list):
-            vector_db_id = vector_db_name[0]
+            vdb_name = vector_db_name[0]
         else:
-            vector_db_id = vector_db_name
+            vdb_name = vector_db_name
 
         # create new collection if necessary
         vector_dbs = embedClient.vector_dbs.list() or []
 
-        if len(vector_dbs) == 0 or vector_db_id not in [
-            v.identifier for v in vector_dbs
+        if len(vector_dbs) == 0 or vdb_name not in [
+            v.vector_db_name for v in vector_dbs
         ]:
             # create vector db on provider
-            st.markdown(f"**Creating new Collection {vector_db_id} on the vdb...**")
+            st.markdown(f"**Creating new Collection {vdb_name} on the vdb...**")
             registerVectorCollection(
                 embedClient=embedClient,
-                vectorDbId=vector_db_id,
+                vectorDbId=vdb_name,
                 embeddingModel=embedding_model_name,
                 embeddingDim=appSettings.config_parameters.vectorstore.embedding_dimensions,
                 providerId=vector_io_provider,
@@ -155,13 +155,16 @@ if uploaded_files:
 
         if len(rag_docs) > 0:
             # embed documents
-            with st.spinner("**Embedding...**"):
-                for doc in rag_docs:
-                    embedClient.vector_io.insert(
-                        vector_db_id=vector_db_id, chunks=[doc]
-                    )
+            try:
+                with st.spinner("**Embedding...**"):
+                    for doc in rag_docs:
+                        embedClient.vector_io.insert(
+                            vector_db_id=getVDBByName(embedClient, vdb_name), chunks=[doc]
+                        )
 
-            st.markdown("**Embedding Done**")
+                st.markdown("**Embedding Done**")
+            except Exception as e:
+                st.error(f"{e}")
 
 # remove client after embedding
 del embedClient

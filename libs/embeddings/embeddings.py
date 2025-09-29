@@ -24,11 +24,21 @@ def registerVectorCollection(
     # call LlamaStack
     embedClient.vector_dbs.register(
         vector_db_id=vectorDbId,
+        vector_db_name=vectorDbId,
         embedding_model=embeddingModel,
         embedding_dimension=embeddingDim,
         provider_id=providerId,
     )
 
+# get vdb id by name
+def getVDBByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
+    dbs: list = [v.identifier for v in embedClient.vector_dbs.list() if v.vector_db_name == vdb_name]
+
+    # check...
+    if len(dbs) > 1:
+        raise Exception(f"{vdb_name} is declared in multiple entries: Alias Error")
+    else:
+        return dbs[0]
 
 def createDoclingConverter(
     do_ocr: bool,
