@@ -6,6 +6,7 @@ apis:
 - eval
 - inference
 - safety
+- files
 - scoring
 - telemetry
 - tool_runtime
@@ -39,6 +40,14 @@ providers:
         type: sqlite
         namespace: null
         db_path: ${env.FAISS_KVSTORE_PATH:=~/.llama/distributions/llamachat-backend}/faiss_kvstore.db
+  files:
+  - provider_type: inline::localfs
+    provider_id: llama-localfs
+    config:
+      storage_dir: ${env.LOCAL_STORAGE_DIR:=~/.llama/distributions/llamachat-backend}/localfs
+      metadata_store:
+        type: sqlite
+        db_path: ${env.LOCAL_STORAGE_DIR:=~/.llama/distributions/llamachat-backend/}/localfs/files_metadata.db
   safety:
   - provider_id: llama-guard
     provider_type: inline::llama-guard

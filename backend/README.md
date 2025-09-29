@@ -4,6 +4,7 @@
 
 ```bash
 $ uv venv -p <python environment> .venv
+$ uv add llama-stack
 ```
 
 2. Build llama stack distribution
