@@ -45,62 +45,71 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     st.success(f"Successfully uploaded {len(uploaded_files)} files")
 
-    # providers
-    providers = embedClient.providers.list()
-    vector_io_provider = st.selectbox(
-        label="Vector Providers",
-        options=[p.provider_id for p in providers if p.api == "vector_io"],
-    )
+    # tweak document ingestion...
+    with st.expander("Document Ingestion Pipeline Settings", expanded=True):
 
-    # embedding model
-    embedding_model_name = st.selectbox(
-        label="Available embedding models",
-        options=stSession.list_models(model_type="embedding"),
-    )
+        provider_col, option_col = st.columns([1,1])
 
-    # Add memory bank name input field
-    vector_db_mode = st.radio(
-        "Select Memory Bank For Embedding",
-        ["**Existing Collection**", "**New Collection**"],
-        captions=[
-            "Embed Documents in a Pre Existing Collection",
-            "Register a new Memory Bank in the Vector DB",
-        ],
-    )
-
-    if vector_db_mode == "**Existing Collection**":
-        vector_dbs = embedClient.vector_dbs.list() or []
-        if not vector_dbs:
-            st.info("No vector databases available for selection.")
-        else:
-            vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
-            vector_db_name = st.multiselect(
-                label="Select Document Collections to use in RAG embeddings",
-                options=vector_dbs,
-                max_selections=1,
+        # providers
+        with provider_col:
+            providers = embedClient.providers.list()
+            vector_io_provider = st.selectbox(
+                label="Vector Providers",
+                options=[p.provider_id for p in providers if p.api == "vector_io"],
             )
-    else:
-        # add new memory bank
-        vector_db_name = st.text_input(
-            "Document Collection Name",
-            value="rag_vector_db",
-            help="Enter a unique identifier for this document collection",
-        )
 
-    # docling conversion options
-    with st.expander("PDF Document Conversion Options", expanded=False):
-        do_ocr = st.checkbox("Use OCR to convert PDFs", value=False)
-        do_table_structure = st.checkbox(
-            "Use Table Structure to convert PDFs", value=True
-        )
-        pdf_conversion_backend = st.selectbox(
-            label="Select Backend", options=["PyPDFium", "Docling Pipeline v4"], index=0
-        )
-        match pdf_conversion_backend:
-            case "PyPDFium":
-                pdf_backend = PyPdfiumDocumentBackend
-            case "Docling Pipeline v4":
-                pdf_backend = DoclingParseV4DocumentBackend
+            # embedding model
+            embedding_model_name = st.selectbox(
+                label="Available embedding models",
+                options=stSession.list_models(model_type="embedding"),
+            )
+            
+            # docling conversion options
+            with st.expander("PDF Document Conversion Options", expanded=False):
+                do_ocr = st.checkbox("Use OCR to convert PDFs", value=False)
+                do_table_structure = st.checkbox(
+                    "Use Table Structure to convert PDFs", value=True
+                )
+                pdf_conversion_backend = st.selectbox(
+                    label="Select Backend", options=["PyPDFium", "Docling Pipeline v4"], index=0
+                )
+                match pdf_conversion_backend:
+                    case "PyPDFium":
+                        pdf_backend = PyPdfiumDocumentBackend
+                    case "Docling Pipeline v4":
+                        pdf_backend = DoclingParseV4DocumentBackend
+            
+
+        # options
+        with option_col:
+            # Add memory bank name input field
+            vector_db_mode = st.radio(
+                "Select Memory Bank For Embedding",
+                ["**Existing Collection**", "**New Collection**"],
+                captions=[
+                    "Embed Documents in a Pre Existing Collection",
+                    "Register a new Memory Bank in the Vector DB",
+                ],
+            )
+
+            if vector_db_mode == "**Existing Collection**":
+                vector_dbs = embedClient.vector_dbs.list() or []
+                if not vector_dbs:
+                    st.info("No vector databases available for selection.")
+                else:
+                    vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
+                    vector_db_name = st.multiselect(
+                        label="Select Document Collections to use in RAG embeddings",
+                        options=vector_dbs,
+                        max_selections=1,
+                    )
+            else:
+                # add new memory bank
+                vector_db_name = st.text_input(
+                    "Document Collection Name",
+                    value="rag_vector_db",
+                    help="Enter a unique identifier for this document collection",
+                )
 
     if st.button("Convert And Embed Documents....", type="primary"):
         # documents to embed:
