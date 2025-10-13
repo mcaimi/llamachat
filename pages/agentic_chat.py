@@ -252,7 +252,7 @@ with st.sidebar:
                 )
                 selected_vector_dbs = []
             else:
-                vector_dbs = [vector_db.identifier for vector_db in vector_dbs]
+                vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
                 selected_vector_dbs = st.multiselect(
                     label="Select Document Collections to use in RAG queries",
                     options=vector_dbs,
@@ -266,7 +266,7 @@ with st.sidebar:
                     tool_dict = dict(
                         name="builtin::rag",
                         args={
-                            "vector_db_ids": list(selected_vector_dbs),
+                            "vector_db_ids": list([getVDBByName(chatClient, item) for item in selected_vector_dbs]),
                         },
                     )
                     toolgroup_selection[i] = tool_dict
