@@ -1,13 +1,14 @@
 [project]
 name = "llamachat"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.1"
+description = "Agentic AI Application, based on Llama-Stack. Now with additional features!"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "docling==2.43.0",
     "ffmpeg>=1.4",
     "huggingface-hub>=0.34.4",
+    "kokoro>=0.9.4",
     "llama-stack-client==0.2.23",
     "matplotlib>=3.10.5",
     "numpy>=2.3.2",
@@ -16,7 +17,7 @@ dependencies = [
     "streamlit>=1.48.0",
     "torch==2.8.0",
     "torchaudio==2.8.0",
-    "torchcodec==0.6.0",
+    "torchcodec==0.7",
     "torchvision==0.23.0",
     "transformers>=4.55.0",
 ]
