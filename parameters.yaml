@@ -32,6 +32,22 @@ whisper:
     "Whisper Tiny": "openai/whisper-tiny"
   revision: "main"
 
+kokoro:
+  model: "Kokoro-82M"
+  supported_models:
+    "Kokoro-82M": "hexgrad/Kokoro-82M"
+  revision: "main"
+  supported_languages:
+    - type: "American English"
+      lang_id: "a"
+      voice_id: "af_heart"
+    - type: "British English"
+      lang_id: "b"
+      voice_id: "bf_emma"
+    - type: "Italian"
+      lang_id: "i"
+      voice_id: "if_sara"
+
 huggingface:
   apitoken: "your_api_token"
   local_dir: "/tmp/cache/huggingface/local_repo"

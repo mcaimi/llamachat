@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 try:
+    from io import BytesIO
     import torch as t
     from torchcodec.decoders import AudioDecoder
     from torchcodec.encoders import AudioEncoder
@@ -96,3 +97,15 @@ def spectrum(clip: AudioDecoder, num_fft_bins: int = FREQUENCY_BINS, title: str 
 
     # return the spectrogram
     return (fig, axis)
+
+# convert a tensor into a byte stream
+def tensorToBytes(tensor: t.Tensor) -> bytes:
+    assert type(tensor) == t.Tensor
+
+    io_obj = BytesIO()
+
+    # save tensor to bytesio
+    t.save(tensor, io_obj)
+
+    # read and return bytes
+    return io_obj.getvalue()
