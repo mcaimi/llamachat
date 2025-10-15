@@ -33,7 +33,10 @@ if __name__ == "__main__":
         audio_page = st.Page(
             "pages/whisper_audio.py", title="Audio to Text", icon=":material/speaker:"
         )
-        enabled_sections = [agentic_page, embeddings_page, audio_page]
+        tts_page = st.Page(
+            "pages/tts_audio.py", title="Text To Speech", icon=":material/speaker:"
+        )
+        enabled_sections = [agentic_page, embeddings_page, audio_page, tts_page]
     else:
         ai_chat_page = st.Page(
             "pages/ai_chat.py", title="AI Chat with RAG", icon=":material/chat:"
