@@ -29,4 +29,13 @@ With LlamaChat, users can easily chat with powerful LLMs both in private environ
 - An Ollama/vLLM instance or a public OpenAI-Compatible API endpoint.
 - Llama-Stack instance running on-prem or in the cloud.
 
+## Issues
 
+On MacOS 26, there could be problems during importing `torchcodec` into the application due to missing DYLD_LIBRARY_PATH settings.
+Project needs `ffmpeg@7`, so a workaround could be:
+
+```
+$ brew install ffmpeg@7
+$ DYLD_LIBRARY_PATH="/opt/homebrew/opt/ffmpeg@7/lib:$DYLD_LIBRARY_PATH" uv run streamlit run main.py
+```
+```
