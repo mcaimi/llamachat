@@ -22,7 +22,7 @@ def registerVectorCollection(
     providerId: str,
 ) -> None:
     # call LlamaStack
-    embedClient.vector_dbs.register(
+    embedClient.vector_stores.register(
         vector_db_id=vectorDbId,
         vector_db_name=vectorDbId,
         embedding_model=embeddingModel,
@@ -32,7 +32,7 @@ def registerVectorCollection(
 
 # get vdb id by name
 def getVDBByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
-    dbs: list = [v.identifier for v in embedClient.vector_dbs.list() if v.vector_db_name == vdb_name]
+    dbs: list = [v.identifier for v in embedClient.vector_stores.list() if v.vector_db_name == vdb_name]
 
     # check...
     if len(dbs) > 1:
