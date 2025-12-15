@@ -1,7 +1,4 @@
 ---
-interface:
-  agentic: True
-
 vectorstore:
   score: 0.6
   max_objects: 10
