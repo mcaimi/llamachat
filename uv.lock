@@ -1067,7 +1067,7 @@ wheels = [
 
 [[package]]
 name = "llama-stack-client"
-version = "0.3.2"
+version = "0.3.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1086,14 +1086,14 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/3f/e7287898d5096066549cbe473a6177667d3fde78f30bb4c4009686693d35/llama_stack_client-0.3.2.tar.gz", hash = "sha256:6ad5e07d827d1b605110de49d66a7138112366e0d91a980939e10c2011c15671", size = 340439, upload-time = "2025-11-12T23:18:37.303Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/ff/b4bb891249379849e6e273a6254998c7e08562613ca4020817af2da9498e/llama_stack_client-0.3.5.tar.gz", hash = "sha256:2d954429347e920038709ae3e026c06f336ce570bd41245fc4e1e54c78879485", size = 335659, upload-time = "2025-12-15T14:10:16.444Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/be/c6/93db0d154ad1de1d96b615007cdab7d25709ed5425e203c64b04435b1ee7/llama_stack_client-0.3.2-py3-none-any.whl", hash = "sha256:a0143759ceba20c671bb60d95bdec71c987a90f9348d0ae16644c37a165678ae", size = 425234, upload-time = "2025-11-12T23:18:35.156Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/10/84a4f0ef1cc13f44a692e55bed6a55792671e5320c95a8fd581e02848d61/llama_stack_client-0.3.5-py3-none-any.whl", hash = "sha256:b98acdc660d60839da8b71d5ae59531ba7f059e3e9656ca5ca20edca70f7d6a2", size = 425244, upload-time = "2025-12-15T14:10:14.726Z" },
 ]
 
 [[package]]
 name = "llamachat"
-version = "0.1.1"
+version = "0.2"
 source = { virtual = "." }
 dependencies = [
     { name = "docling" },
@@ -1119,7 +1119,7 @@ requires-dist = [
     { name = "ffmpeg", specifier = ">=1.4" },
     { name = "huggingface-hub", specifier = ">=0.34.4" },
     { name = "kokoro", specifier = ">=0.9.4" },
-    { name = "llama-stack-client", specifier = "==0.3.2" },
+    { name = "llama-stack-client", specifier = "==0.3.5" },
     { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pdfplumber", specifier = ">=0.11.7" },

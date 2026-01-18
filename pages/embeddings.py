@@ -47,8 +47,7 @@ if uploaded_files:
 
     # tweak document ingestion...
     with st.expander("Document Ingestion Pipeline Settings", expanded=True):
-
-        provider_col, option_col = st.columns([1,1])
+        provider_col, option_col = st.columns([1, 1])
 
         # providers
         with provider_col:
@@ -63,7 +62,7 @@ if uploaded_files:
                 label="Available embedding models",
                 options=stSession.list_models(model_type="embedding"),
             )
-            
+
             # docling conversion options
             with st.expander("PDF Document Conversion Options", expanded=False):
                 do_ocr = st.checkbox("Use OCR to convert PDFs", value=False)
@@ -71,14 +70,15 @@ if uploaded_files:
                     "Use Table Structure to convert PDFs", value=True
                 )
                 pdf_conversion_backend = st.selectbox(
-                    label="Select Backend", options=["PyPDFium", "Docling Pipeline v4"], index=0
+                    label="Select Backend",
+                    options=["PyPDFium", "Docling Pipeline v4"],
+                    index=0,
                 )
                 match pdf_conversion_backend:
                     case "PyPDFium":
                         pdf_backend = PyPdfiumDocumentBackend
                     case "Docling Pipeline v4":
                         pdf_backend = DoclingParseV4DocumentBackend
-            
 
         # options
         with option_col:
@@ -168,7 +168,8 @@ if uploaded_files:
                 with st.spinner("**Embedding...**"):
                     for doc in rag_docs:
                         embedClient.vector_io.insert(
-                            vector_db_id=getVDBByName(embedClient, vdb_name), chunks=[doc]
+                            vector_db_id=getVDBByName(embedClient, vdb_name),
+                            chunks=[doc],
                         )
 
                 st.markdown("**Embedding Done**")

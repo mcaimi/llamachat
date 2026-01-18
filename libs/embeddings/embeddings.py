@@ -2,7 +2,6 @@
 
 try:
     import mimetypes as mt
-    from llama_stack_client import LlamaStackClient
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat, DocumentStream
     from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -30,15 +29,21 @@ def registerVectorCollection(
         provider_id=providerId,
     )
 
+
 # get vdb id by name
 def getVDBByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
-    dbs: list = [v.identifier for v in embedClient.vector_stores.list() if v.vector_db_name == vdb_name]
+    dbs: list = [
+        v.identifier
+        for v in embedClient.vector_stores.list()
+        if v.vector_db_name == vdb_name
+    ]
 
     # check...
     if len(dbs) > 1:
         raise Exception(f"{vdb_name} is declared in multiple entries: Alias Error")
     else:
         return dbs[0]
+
 
 def createDoclingConverter(
     do_ocr: bool,

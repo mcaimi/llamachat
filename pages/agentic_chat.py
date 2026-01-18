@@ -18,15 +18,15 @@ try:
         # local imports
         from libs.shared.settings import Properties
         from libs.shared.session import Session
+        from libs.shared.agent import Agent, AgentSession
+        from libs.shared.state import AgentMessage
+        from libs.shared.responses import format_response
         from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
 # llama stack
-from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
-from llama_stack_client.lib.agents.react.agent import ReActAgent
-from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
-from llama_stack_client.types import UserMessage, CompletionMessage
+from llama_stack_client import LlamaStackClient
 
 # load environment
 config_env: dict = dotenv_values(".env")
@@ -77,7 +77,7 @@ stSession.add_to_session_state(
 
 # build streamlit UI
 st.set_page_config(
-    page_title="🧠 RedHat Agentic AI Assistant",
+    page_title="🧠 Agentic AI Assistant",
     initial_sidebar_state="collapsed",
     layout="wide",
 )
@@ -91,7 +91,6 @@ with st.sidebar:
     # reset function
     def reset_agent():
         st.cache_resource.clear()
-        stSession.remove_from_session_state("agent_session_id")
 
     st.header("🛠 LLM Control Panel")
 
@@ -103,22 +102,20 @@ with st.sidebar:
 
         # select operation mode
         agentic_mode = st.radio(
-            "Select Agentic Mode",
-            ["**LlamaStack Agentic**", "**ReAct**"],
+            "Select Interaction Mode",
+            ["**LLM Chat**", "**Agentic**"],
             captions=[
-                "Use LlamaStack Agentic Framework",
-                "Use Reasoning Model to Improve Tool Calling",
+                "Chat with a model to answer questions and generate text.",
+                "Interact with tools and MCP servers.",
             ],
             on_change=reset_agent,
         )
 
         match agentic_mode:
-            case "**LlamaStack Agentic**":
-                agent_mode = "agentic"
-            case "**ReAct**":
-                agent_mode = "react"
-
-        enable_persistence = st.checkbox(label="Enable Session Persistence", value=True)
+            case "**LLM Chat**":
+                agent_mode = "chat"
+            case "**Agentic**":
+                agent_mode = "agent"
 
     with st.expander("System Prompt"):
         new_prompt = st.text_area(
@@ -128,7 +125,7 @@ with st.sidebar:
             on_change=reset_agent,
         )
         if st.button("🔄 Apply New Prompt"):
-            stSession.session_state.system_prompt = new_prompt
+            stSession.update_system_prompt(new_prompt)
             st.success("System prompt updated.")
             reset_agent()
 
@@ -180,8 +177,9 @@ with st.sidebar:
     st.markdown(f"**🔌 Current Model:** `{stSession.session_state.model_name}`")
     st.markdown(f"**🔌 Current Mode:** `{agent_mode}`")
 
-    if st.button("Clear Current Chat"):
-        stSession.session_state.agent_messages = []
+    if st.button("Reset Agent State"):
+        stSession.clear_chat_session()
+        reset_agent()
 
     st.divider()
     with st.expander("🛠 Agentic"):
@@ -203,22 +201,14 @@ with st.sidebar:
         ]
 
         # MCP Servers comes first now
-        mcp_label_map = {
-            "mcp::tools": "MCP Tools",
-            "mcp::opencv": "OpenCV Toolkit",
-        }
-        mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
-        mcp_label_to_tool = {mcp_label_map.get(k, k): k for k in mcp_tools_list}
-
         st.subheader("MCP Servers")
-        mcp_display_selection = st.pills(
+        mcp_selection = st.pills(
             label="Registered APIs",
-            options=mcp_display_options,
+            options=mcp_tools_list,
             selection_mode="multi",
-            default=mcp_display_options,
+            default=mcp_tools_list,
             on_change=reset_agent,
         )
-        mcp_selection = [mcp_label_to_tool[label] for label in mcp_display_selection]
 
         # Builtin Tools
         builtin_label_map = {
@@ -290,7 +280,7 @@ with st.sidebar:
 
             active_tool_list.extend(
                 [
-                    f"{''.join(toolgroup_id)}:{t.identifier}"
+                    f"{''.join(toolgroup_id)}:{t.name}"
                     for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
                 ]
             )
@@ -356,49 +346,42 @@ inference_parms = {
 
 # Define Agent for AI Interaction
 @st.cache_resource
-def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
+def instantiate_ai_agent(_client, model_name, instructions, tools, parameters):
     match agent_mode:
-        case "agentic":
+        case "chat":
             return Agent(
-                chatClient,
-                model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""",
-                tools=availableTools,
-                tool_config={"tool_choice": "auto"},
-                sampling_params=inferenceParms,
+                llamastack_client = _client,
+                model = model_name,
+                instructions = f"""{instructions}.""",
+                #tools=availableTools,
+                #sampling_params=inferenceParms,
                 # Configure safety (optional)
-                input_shields=input_shields,
-                output_shields=output_shields,
-                enable_session_persistence=enable_persistence,
+                #input_shields=input_shields,
+                #output_shields=output_shields,
+                #enable_session_persistence=enable_persistence,
             )
-        case "react":
-            return ReActAgent(
-                chatClient,
-                model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""",
-                tools=availableTools,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": ReActOutput.model_json_schema(),
-                },
-                tool_config={"tool_choice": "auto"},
-                sampling_params=inferenceParms,
-                input_shields=input_shields,
-                output_shields=output_shields,
-                enable_session_persistence=enable_persistence,
+        case "agent":
+            return Agent(
+                llamastack_client = _client,
+                model = model_name,
+                instructions = f"""{instructions}. You have tools available that you can use to respond to the user.""",
+                #tools=availableTools,
+                #response_format={
+                #    "type": "json_schema",
+                #    "json_schema": ReActOutput.model_json_schema(),
+                #},
+                #sampling_params=inferenceParms,
+                #input_shields=input_shields,
+                #output_shields=output_shields,
+                #enable_session_persistence=enable_persistence,
             )
 
 chatAgent = instantiate_ai_agent(
-    stSession.session_state.model_name,
-    stSession.session_state.system_prompt,
-    toolgroup_selection,
-    inference_parms,
-)
-
-# create local agent session to maintain memory
-stSession.add_to_session_state(
-    "agent_session_id",
-    chatAgent.create_session(session_name=f"agent_session_{uuid.uuid4()}"),
+    _client = chatClient,
+    model_name = stSession.session_state.model_name,
+    instructions = stSession.session_state.system_prompt,
+    tools = toolgroup_selection,
+    parameters = inference_parms,
 )
 
 # Chat Interface
@@ -435,13 +418,25 @@ if prompt_raw:
 
                         # base64 encoding
                         im_b64 = base64.b64encode(f.read()).decode("utf-8")
+                        # image entity in content
+                        img_entity = {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{im_b64}",
+                        }
+                        # text entity_in content
+                        txt_entity = {
+                            "type": "input_text",
+                            "text": f"{prompt}",
+                        }
 
                         # update prompt:
-                        augmented_prompt = []
-                        augmented_prompt.append({"type": "text", "text": f"{prompt}."})
-                        augmented_prompt.append(
-                            {"type": "image", "image": {"data": im_b64}}
-                        )
+                        augmented_prompt = [{
+                            "role": "user",
+                            "content": [
+                                txt_entity,
+                                img_entity
+                            ]
+                        }]
                     else:
                         with st.spinner(f"🧠 Embedding.... {f.name}"):
                             # instantiate converter
@@ -458,47 +453,38 @@ if prompt_raw:
                                 ).document.export_to_markdown()
 
                             # update prompt...
-                            augmented_prompt += f"Your context is: {augmented_query}"
+                            augmented_prompt += f"What follows is the context you have to use to answer the question: {augmented_query}"
 
                             del converter
                         st.markdown("** Conversion Done! **")
 
             # append user request
             stSession.session_state.agent_messages.append(
-                UserMessage(content=prompt, role="user")
+                AgentMessage(_content=prompt, _role="user")
             )
 
             # chat with the ai agent
             with st.spinner("🧠Thinking...."):
                 response = chatAgent.create_turn(
-                    messages=[{"role": "user", "content": augmented_prompt}],
-                    session_id=stSession.session_state.agent_session_id,
-                    stream=True,
+                    prompt=augmented_prompt
                 )
 
             # parse responses
             message_placeholder = st.empty()
-            full_response = ""
-            retrieval_response = ""
-            for log in AgentEventLogger().log(response):
-                if log.role == "tool_execution":
-                    retrieval_response += log.content.replace("====", "").strip()
-                else:
-                    full_response += log.content
-                    message_placeholder.markdown(full_response + "▌")
+            prompt_response, tool_response = format_response(response)
 
-            message_placeholder.markdown(full_response)
-
+            message_placeholder.markdown(prompt_response)
+            
             with st.expander("Tool Call Info"):
                 retrieval_message_placeholder = st.empty()
-                retrieval_message_placeholder.markdown(retrieval_response)
+                retrieval_message_placeholder.markdown(tool_response)
         except Exception as e:
             st.error(f"Request failed: {e}")
 
         # add to history
         stSession.session_state.agent_messages.append(
-            CompletionMessage(
-                role="assistant", content=full_response, stop_reason="end_of_turn"
+            AgentMessage(
+                _role="assistant", _content=prompt_response
             )
         )
 
