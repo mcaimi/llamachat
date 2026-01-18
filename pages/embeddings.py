@@ -93,7 +93,7 @@ if uploaded_files:
             )
 
             if vector_db_mode == "**Existing Collection**":
-                vector_dbs = embedClient.vector_dbs.list() or []
+                vector_dbs = embedClient.vector_stores.list() or []
                 if not vector_dbs:
                     st.info("No vector databases available for selection.")
                 else:
@@ -147,9 +147,11 @@ if uploaded_files:
             vdb_name = vector_db_name
 
         # create new collection if necessary
-        vector_dbs = embedClient.vector_dbs.list() or []
+        vector_dbs = embedClient.vector_stores.list() or []
 
-        if len(vector_dbs) == 0 or vdb_name not in [
+        print(vector_dbs)
+
+        if len(vector_dbs.data) == 0 or vdb_name not in [
             v.vector_db_name for v in vector_dbs
         ]:
             # create vector db on provider
