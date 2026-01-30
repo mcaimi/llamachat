@@ -8,6 +8,7 @@ try:
     from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
     from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
     from docling.chunking import HybridChunker
+    from llama_stack_client import LlamaStackClient
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
