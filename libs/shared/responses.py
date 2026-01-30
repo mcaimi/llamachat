@@ -128,6 +128,7 @@ def format_response(response) -> (str, str):
     # Initialize variables to store the formatted output and tool call response
     output_response = ""
     tool_call_response = ""
+    tool_list_response = ""
 
     # Prepare the tool call response string with relevant information
     # Use f-string formatting for cleaner code
@@ -137,28 +138,38 @@ def format_response(response) -> (str, str):
             "Model": response.model,
             "Timestamp": response.created_at,
             "Status": response.status,
+            "Input Tokens": f":violet-badge[{response.usage.input_tokens}]",
+            "Output Tokens": f":orange-badge[{response.usage.output_tokens}]",
+            "Total Tokens": f":grey-badge[{response.usage.total_tokens}]",
         }
     )
     
     # Iterate over each output item in the response
-    for i, output_item in enumerate(response.output):              
-        if output_item.type in ("text", "message"):
-            # Append text content to the output_response string
-            output_response += f"{output_item.content[0].text}"
-        elif output_item.type == "file_search_call":
-            # Extract relevant information from the file search call
-            tool_call_response += f"### Msg Type: {output_item.type} - Tool Call ID: {output_item.id}, Tool Status: {output_item.status}\n"
-            tool_call_response += f"### Queries: {', '.join(output_item.queries)}\n"
-            # Append results to the output_response string if available
-            tool_call_response += f"###  Results: {output_item.results if output_item.results else 'None'}"
-        elif output_item.type == "mcp_list_tools":
-            # Call function to print MCP list tools (not shown in this code snippet)
-            tool_call_response += format_mcp_list_tools(output_item)
-        elif output_item.type == "mcp_call":
-            # Call function to print MCP call (not shown in this code snippet)
-            tool_call_response += format_mcp_response(output_item)
-        else:
-            # Append generic response content to the output_response string
-            output_response += f"Response content: {output_item.content}"
+    for i, output_item in enumerate(response.output):
+        match output_item.type:          
+            case "text" | "message":
+                # Append text content to the output_response string
+                content = output_item.content[0]
+                # determine message type
+                match content.type:
+                    case "output_text":
+                        output_response += f"{content.text}"
+                    case "refusal":
+                        output_response += f"{content.refusal}"
+            case "file_search_call":
+                # Extract relevant information from the file search call
+                tool_call_response += f"### Msg Type: {output_item.type} - Tool Call ID: {output_item.id}, Tool Status: {output_item.status}\n"
+                tool_call_response += f"### Queries: {', '.join(output_item.queries)}\n"
+                # Append results to the output_response string if available
+                tool_call_response += f"###  Results: {output_item.results if output_item.results else 'None'}"
+            case "mcp_list_tools":
+                # Call function to print MCP list tools
+                tool_list_response += format_mcp_list_tools(output_item)
+            case "mcp_call":
+                # Call function to print MCP call
+                tool_call_response += format_mcp_response(output_item)
+            case _:
+                # Append generic response content to the output_response string
+                output_response += f"Response content: {output_item.content}"
 
     return output_response, tool_call_response

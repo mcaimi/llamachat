@@ -96,8 +96,14 @@ class Session(object):
 
             if resp.status_code == 200:
                 if model_type == "shield":
-                    models = [m['identifier'] for m in resp.json().get('data', []) if m['type'] == model_type]
-                    print(models)
+                    models = [
+                        {
+                            "id": m['identifier'],
+                            "provider": m["provider_id"],
+                            "model": m['provider_resource_id']
+                        }
+                        for m in resp.json().get('data', []) if m['type'] == model_type
+                    ]
                 else:
                     models = [m['id'] for m in resp.json().get('data', []) if m['custom_metadata']['model_type'] == model_type]
                 if models:

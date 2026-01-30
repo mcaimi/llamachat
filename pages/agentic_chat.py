@@ -182,111 +182,71 @@ with st.sidebar:
         reset_agent()
 
     st.divider()
-    with st.expander("🛠 Agentic"):
+    with st.expander("🛠 Advanced"):
         st.markdown("**Shields**")
         shield_models = stSession.list_models(model_type="shield")
-        input_shields = st.multiselect(
-            label="Input Shields", options=shield_models, on_change=reset_agent
+
+        # select input shields
+        in_shield_objects = st.multiselect(
+            label="Input Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
         )
-        output_shields = st.multiselect(
-            label="Output Shields", options=shield_models, on_change=reset_agent
+        input_shields = [m['model'] for m in shield_models if m['id'] in in_shield_objects]
+
+        # select output shields
+        out_shield_objects = st.multiselect(
+            label="Output Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
         )
+        output_shields = [m['model'] for m in shield_models if m['id'] in out_shield_objects]
 
-        st.markdown("**🔌 Agentic Workflow Capabilities**")
-        tool_groups = chatClient.toolgroups.list()
-        tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
-        mcp_tools_list = [tool for tool in tool_groups_list if tool.startswith("mcp::")]
-        builtin_tools_list = [
-            tool for tool in tool_groups_list if not tool.startswith("mcp::")
-        ]
 
-        # MCP Servers comes first now
-        st.subheader("MCP Servers")
-        mcp_selection = st.pills(
-            label="Registered APIs",
-            options=mcp_tools_list,
-            selection_mode="multi",
-            default=mcp_tools_list,
-            on_change=reset_agent,
-        )
+        # if mode is Agent...
+        if agent_mode == "agent":
+            st.markdown("**🔌 Agentic Workflow Capabilities**")
+            # get a list of toolgroups * DEPRECATED API *
+            tool_groups = chatClient.toolgroups.list()
 
-        # Builtin Tools
-        builtin_label_map = {
-            "builtin::websearch": "Web search",
-            "builtin::rag": "Retrieval augmented generation",
-            "builtin::code_interpreter": "Code interpreter",
-            "builtin::wolfram_alpha": "Wolfram Alpha",
-        }
-        blt_display_options = [
-            builtin_label_map.get(tool, tool) for tool in builtin_tools_list
-        ]
-        blt_label_to_tool = {builtin_label_map.get(k, k): k for k in builtin_tools_list}
-
-        st.subheader("Builtin Tools")
-        blt_display_selection = st.pills(
-            label="Registered APIs",
-            options=blt_display_options,
-            selection_mode="multi",
-            on_change=reset_agent,
-        )
-        toolgroup_selection = [
-            blt_label_to_tool[label] for label in blt_display_selection
-        ]
-
-        # if rag is selected, also get a list of all collections in the database
-        if "builtin::rag" in toolgroup_selection:
-            vector_dbs = chatClient.vector_dbs.list() or []
-            if not vector_dbs:
-                st.info(
-                    "No vector databases available for selection. Create one using the Embedding Page."
-                )
-                selected_vector_dbs = []
-            else:
-                vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
-                selected_vector_dbs = st.multiselect(
-                    label="Select Document Collections to use in RAG queries",
-                    options=vector_dbs,
-                    on_change=reset_agent,
-                )
-
-        # add arguments to tools that need them
-        for i, tool_name in enumerate(toolgroup_selection):
-            match tool_name:
-                case "builtin::rag":
-                    tool_dict = dict(
-                        name="builtin::rag",
-                        args={
-                            "vector_db_ids": list([getVDBByName(chatClient, item) for item in selected_vector_dbs]),
-                        },
-                    )
-                    toolgroup_selection[i] = tool_dict
-                case "builtin::websearch":
-                    tool_dict = dict(
-                        name="builtin::websearch",
-                        args={
-                            "max_results": 10,
-                        },
-                    )
-                    toolgroup_selection[i] = tool_dict
-
-        # Final combined selection
-        toolgroup_selection.extend(mcp_selection)
-
-        # display active tools
-        active_tool_list = []
-        for toolgroup_id in toolgroup_selection:
-            if isinstance(toolgroup_id, dict):
-                toolgroup_id = toolgroup_id.get("name")
-
-            active_tool_list.extend(
-                [
-                    f"{''.join(toolgroup_id)}:{t.name}"
-                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
-                ]
+            # build list of available MCP endpoints
+            mcp_tools_list = [
+                {
+                    "type": "mcp",
+                    "server_url": tool.mcp_endpoint.uri,
+                    "server_label": tool.identifier
+                }
+                for tool in tool_groups if tool.identifier.startswith("mcp::")
+            ]
+            
+            # MCP Servers comes first now
+            st.subheader("MCP Servers")
+            mcp_selection = st.pills(
+                label="Registered APIs",
+                options=[t.get("server_label") for t in mcp_tools_list],
+                default=[t.get("server_label") for t in mcp_tools_list],
+                selection_mode="multi",
+                on_change=reset_agent,
             )
-        with st.expander("🛠 AI Tool Info...", expanded=False):
-            st.subheader(f"Active Tools: {len(active_tool_list)}")
-            st.json(active_tool_list)
+
+            # Final combined selection
+            toolgroup_selection = []
+            toolgroup_selection.extend(mcp_tools_list)
+
+            # display active tools
+            active_tool_list = []
+            for toolgroup_id in toolgroup_selection:
+                if isinstance(toolgroup_id, dict):
+                    toolgroup_id = toolgroup_id.get("server_label")
+
+                active_tool_list.extend(
+                    [
+                        f"{''.join(toolgroup_id)}:{t.name}"
+                        for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
+                    ]
+                )
+            with st.expander("🛠 AI Tool Info...", expanded=False):
+                st.subheader(f"Active Tools: {len(active_tool_list)}")
+                st.json(active_tool_list)
+        else:
+            toolgroup_selection = None
+
 
     st.divider()
     with st.expander("💾 Save Chat Log..."):
@@ -346,34 +306,35 @@ inference_parms = {
 
 # Define Agent for AI Interaction
 @st.cache_resource
-def instantiate_ai_agent(_client, model_name, instructions, tools, parameters):
+def instantiate_ai_agent(_client,
+                        model_name,
+                        instructions,
+                        tools,
+                        parameters,
+                        input_shields,
+                        output_shields):
     match agent_mode:
         case "chat":
             return Agent(
                 llamastack_client = _client,
                 model = model_name,
                 instructions = f"""{instructions}.""",
-                #tools=availableTools,
-                #sampling_params=inferenceParms,
-                # Configure safety (optional)
-                #input_shields=input_shields,
-                #output_shields=output_shields,
-                #enable_session_persistence=enable_persistence,
+                input_shields=input_shields,
+                output_shields=output_shields
             )
         case "agent":
             return Agent(
                 llamastack_client = _client,
                 model = model_name,
                 instructions = f"""{instructions}. You have tools available that you can use to respond to the user.""",
-                #tools=availableTools,
+                tools=tools,
+                input_shields=input_shields,
+                output_shields=output_shields,
                 #response_format={
                 #    "type": "json_schema",
                 #    "json_schema": ReActOutput.model_json_schema(),
                 #},
                 #sampling_params=inferenceParms,
-                #input_shields=input_shields,
-                #output_shields=output_shields,
-                #enable_session_persistence=enable_persistence,
             )
 
 chatAgent = instantiate_ai_agent(
@@ -382,6 +343,8 @@ chatAgent = instantiate_ai_agent(
     instructions = stSession.session_state.system_prompt,
     tools = toolgroup_selection,
     parameters = inference_parms,
+    input_shields=input_shields,
+    output_shields=output_shields
 )
 
 # Chat Interface
@@ -463,21 +426,40 @@ if prompt_raw:
                 AgentMessage(_content=prompt, _role="user")
             )
 
-            # chat with the ai agent
-            with st.spinner("🧠Thinking...."):
-                response = chatAgent.create_turn(
-                    prompt=augmented_prompt
-                )
+            # run input shield...
+            with st.spinner("Running Input Shield..."):
+                flagged, output = chatAgent.input_shield(augmented_prompt)
 
-            # parse responses
-            message_placeholder = st.empty()
-            prompt_response, tool_response = format_response(response)
+            if not flagged:
+                # chat with the ai agent
+                with st.spinner("🧠Thinking...."):
+                    response = chatAgent.create_turn(
+                        prompt=augmented_prompt
+                    )
 
-            message_placeholder.markdown(prompt_response)
+                # parse responses
+                message_placeholder = st.empty()
+                prompt_response, tool_response = format_response(response)
+
+                # perform output shielding...
+                message_placeholder = st.empty()
+                with st.spinner("Running Output Shield..."):
+                    flagged, output = chatAgent.output_shield(prompt_response)
+
+                if flagged:
+                    # filter response
+                    prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
+                
+                message_placeholder.markdown(prompt_response)    
+                
+                with st.expander("Inference Stack"):
+                    retrieval_message_placeholder = st.empty()
+                    retrieval_message_placeholder.markdown(tool_response)
+            else:
+                prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
+                message_placeholder = st.empty()
+                message_placeholder.markdown(prompt_response)
             
-            with st.expander("Tool Call Info"):
-                retrieval_message_placeholder = st.empty()
-                retrieval_message_placeholder.markdown(tool_response)
         except Exception as e:
             st.error(f"Request failed: {e}")
 
