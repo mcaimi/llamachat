@@ -9,6 +9,7 @@ try:
 
     with st.spinner("**Loading Docling Backend...**"):
         from libs.embeddings.embeddings import *
+        from libs.embeddings.vectorio import *
 except ImportError as e:
     print(f"Caught Exception: {e}")
 
@@ -97,7 +98,7 @@ if uploaded_files:
                 if not vector_dbs:
                     st.info("No vector databases available for selection.")
                 else:
-                    vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
+                    vector_dbs = [vector_db.name for vector_db in vector_dbs]
                     vector_db_name = st.multiselect(
                         label="Select Document Collections to use in RAG embeddings",
                         options=vector_dbs,
@@ -150,7 +151,7 @@ if uploaded_files:
         vector_dbs = embedClient.vector_stores.list() or []
 
         if len(vector_dbs.data) == 0 or vdb_name not in [
-            v.vector_db_name for v in vector_dbs.data
+            v.name for v in vector_dbs.data
         ]:
             # create vector db on provider
             st.markdown(f"**Creating new Collection {vdb_name} on the vdb...**")
@@ -166,9 +167,11 @@ if uploaded_files:
             # embed documents
             try:
                 with st.spinner("**Embedding...**"):
+                    rag_docs = computeEmbeddings(embedClient=embedClient, inputList=rag_docs, vdb_name=vdb_name)
+                    
                     for doc in rag_docs:
                         embedClient.vector_io.insert(
-                            vector_db_id=getVDBByName(embedClient, vdb_name),
+                            vector_store_id=getVdbIdByName(embedClient, vdb_name),
                             chunks=[doc],
                         )
 

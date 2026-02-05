@@ -401,7 +401,7 @@ if prompt_raw:
                             ]
                         }]
                     else:
-                        with st.spinner(f"🧠 Embedding.... {f.name}"):
+                        with st.spinner(f"🧠 Creating Docling Converter.... {f.name}"):
                             # instantiate converter
                             converter = createDoclingConverter(
                                 do_ocr=False, do_table_structure=True
