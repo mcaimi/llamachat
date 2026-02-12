@@ -138,38 +138,37 @@ with st.sidebar:
             0.05,
             on_change=reset_agent,
         )
-        stSession.session_state.top_p = st.slider(
-            "📊 Top-P",
-            0.0,
-            1.0,
-            0.9,
-            0.05,
-            on_change=reset_agent,
-        )
-        stSession.session_state.n_comp = st.text_input(
-            "Num Completions",
-            value=appSettings.config_parameters.llm.n_comp,
-            on_change=reset_agent,
-        )
-        stSession.session_state.max_tokens = st.text_input(
+        stSession.session_state.max_output_tokens = st.number_input(
             "🔁 Tokens",
+            min_value = 16,
             value=appSettings.config_parameters.llm.max_tokens,
             on_change=reset_agent,
         )
-        stSession.session_state.presence_penalty = st.slider(
-            "🔁 Presence Penalty",
-            -2.0,
-            2.0,
-            1.1,
-            0.1,
+        stSession.session_state.max_infer_iters = st.number_input(
+            "🔁 Max Inference Iterations",
+            min_value=1,
+            max_value=100,
+            value=2,
             on_change=reset_agent,
         )
-        stSession.session_state.repeat_penalty = st.slider(
-            "🔁 Repeat Penalty",
-            -2.0,
-            2.0,
-            1.1,
-            0.1,
+        stSession.session_state.max_tool_calls = st.number_input(
+            "Max Number of Tool Calls",
+            min_value=1,
+            max_value=100,
+            value=5,
+            on_change=reset_agent,
+        )
+        stSession.session_state.parallel_tool_calls = st.radio(
+            "Enable Parallel Tool Calls",
+            [True, False],
+            index=1,
+            on_change=reset_agent,
+        )
+        stSession.session_state.timeout = st.number_input(
+            "Inference Timeout",
+            min_value=30,
+            max_value=500,
+            value=120,
             on_change=reset_agent,
         )
 
@@ -292,17 +291,13 @@ with st.sidebar:
 
 # inference parameters
 inference_parms = {
-    "max_tokens": stSession.session_state.max_tokens,
-    "n": stSession.session_state.n_comp,
-    "strategy": {
-        "type": "top_p",
-        "temperature": stSession.session_state.temperature,
-        "top_p": stSession.session_state.top_p,
-    },
-    "presence_penalty": stSession.session_state.presence_penalty,
-    "frequency_penalty": stSession.session_state.repeat_penalty,
+    #"max_output_tokens": int(stSession.session_state.max_output_tokens),
+    "temperature": float(stSession.session_state.temperature),
+    "timeout": int(stSession.session_state.timeout),
+    "max_infer_iters": int(stSession.session_state.max_infer_iters),
+    "max_tool_calls": int(stSession.session_state.max_tool_calls),
+    "parallel_tool_calls": bool(stSession.session_state.parallel_tool_calls),
 }
-
 
 # Define Agent for AI Interaction
 @st.cache_resource
@@ -312,7 +307,8 @@ def instantiate_ai_agent(_client,
                         tools,
                         parameters,
                         input_shields,
-                        output_shields):
+                        output_shields,
+                        inferenceParms):
     match agent_mode:
         case "chat":
             return Agent(
@@ -320,7 +316,8 @@ def instantiate_ai_agent(_client,
                 model = model_name,
                 instructions = f"""{instructions}.""",
                 input_shields=input_shields,
-                output_shields=output_shields
+                output_shields=output_shields,
+                sampling_params=inferenceParms,
             )
         case "agent":
             return Agent(
@@ -330,11 +327,7 @@ def instantiate_ai_agent(_client,
                 tools=tools,
                 input_shields=input_shields,
                 output_shields=output_shields,
-                #response_format={
-                #    "type": "json_schema",
-                #    "json_schema": ReActOutput.model_json_schema(),
-                #},
-                #sampling_params=inferenceParms,
+                sampling_params=inferenceParms,
             )
 
 chatAgent = instantiate_ai_agent(
@@ -344,7 +337,8 @@ chatAgent = instantiate_ai_agent(
     tools = toolgroup_selection,
     parameters = inference_parms,
     input_shields=input_shields,
-    output_shields=output_shields
+    output_shields=output_shields,
+    inferenceParms=inference_parms
 )
 
 # Chat Interface
