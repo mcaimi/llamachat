@@ -63,17 +63,13 @@ stSession.add_to_session_state(
 stSession.add_to_session_state(
     "temperature", appSettings.config_parameters.llm.temperature
 )
-stSession.add_to_session_state("top_p", appSettings.config_parameters.llm.top_p)
-stSession.add_to_session_state("n_comp", appSettings.config_parameters.llm.n_comp)
+stSession.add_to_session_state("max_infer_iters", appSettings.config_parameters.llm.max_infer_iters)
+stSession.add_to_session_state("max_tool_calls", appSettings.config_parameters.llm.max_tool_calls)
+stSession.add_to_session_state("parallel_tool_calls", appSettings.config_parameters.llm.parallel_tool_calls)
 stSession.add_to_session_state(
-    "max_tokens", appSettings.config_parameters.llm.max_tokens
+    "max_output_tokens", appSettings.config_parameters.llm.max_output_tokens
 )
-stSession.add_to_session_state(
-    "presence_penalty", appSettings.config_parameters.llm.presence_penalty
-)
-stSession.add_to_session_state(
-    "repeat_penalty", appSettings.config_parameters.llm.repeat_penalty
-)
+stSession.add_to_session_state("timeout", appSettings.config_parameters.llm.timeout)
 
 # build streamlit UI
 st.set_page_config(
@@ -134,41 +130,40 @@ with st.sidebar:
             "🌡️ Temperature",
             0.0,
             2.0,
-            0.7,
+            appSettings.config_parameters.llm.temperature,
             0.05,
             on_change=reset_agent,
         )
         stSession.session_state.max_output_tokens = st.number_input(
             "🔁 Tokens",
             min_value = 16,
-            value=appSettings.config_parameters.llm.max_tokens,
+            value=appSettings.config_parameters.llm.max_output_tokens,
             on_change=reset_agent,
         )
         stSession.session_state.max_infer_iters = st.number_input(
             "🔁 Max Inference Iterations",
             min_value=1,
             max_value=100,
-            value=2,
+            value=appSettings.config_parameters.llm.max_infer_iters,
             on_change=reset_agent,
         )
         stSession.session_state.max_tool_calls = st.number_input(
             "Max Number of Tool Calls",
             min_value=1,
             max_value=100,
-            value=5,
+            value=appSettings.config_parameters.llm.max_tool_calls,
             on_change=reset_agent,
         )
-        stSession.session_state.parallel_tool_calls = st.radio(
+        stSession.session_state.parallel_tool_calls = st.checkbox(
             "Enable Parallel Tool Calls",
-            [True, False],
-            index=1,
+            value=appSettings.config_parameters.llm.parallel_tool_calls,
             on_change=reset_agent,
         )
         stSession.session_state.timeout = st.number_input(
             "Inference Timeout",
             min_value=30,
             max_value=500,
-            value=120,
+            value=appSettings.config_parameters.llm.timeout,
             on_change=reset_agent,
         )
 
@@ -226,20 +221,53 @@ with st.sidebar:
 
             # Final combined selection
             toolgroup_selection = []
-            toolgroup_selection.extend(mcp_tools_list)
+            toolgroup_selection.extend([tool for tool in mcp_tools_list if tool.get("server_label") in mcp_selection])
+
+            # rag capability
+            enable_rag = st.checkbox(
+                "Enable RAG",
+                value=False,
+                on_change=reset_agent
+            )
+
+            # display available vector ids
+            vector_ids = st.multiselect(
+                "Select Vector Databases",
+                options=[vector_db.name for vector_db in chatClient.vector_stores.list()],
+                disabled=not enable_rag
+            )
+
+            if enable_rag:
+                toolgroup_selection.extend([{
+                        "type": "file_search",
+                        "vector_store_ids": [v.id for v in chatClient.vector_stores.list() if v.name in vector_ids] or [],
+                    }]
+                )
 
             # display active tools
             active_tool_list = []
             for toolgroup_id in toolgroup_selection:
                 if isinstance(toolgroup_id, dict):
-                    toolgroup_id = toolgroup_id.get("server_label")
+                    tool_type = toolgroup_id.get("type")
 
-                active_tool_list.extend(
-                    [
-                        f"{''.join(toolgroup_id)}:{t.name}"
-                        for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
-                    ]
-                )
+                    match tool_type:
+                        case "mcp":
+                            toolgroup_id = toolgroup_id.get("server_label")
+
+                            active_tool_list.extend(
+                                [
+                                    f"{''.join(toolgroup_id)}:{t.name}"
+                                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
+                                ]
+                            )
+                        case "file_search":
+                            vector_ids = toolgroup_id.get("vector_store_ids")
+                            active_tool_list.extend(
+                                [
+                                    f"inline::file_search::{vector_ids}"
+                                ]
+                            )
+
             with st.expander("🛠 AI Tool Info...", expanded=False):
                 st.subheader(f"Active Tools: {len(active_tool_list)}")
                 st.json(active_tool_list)
