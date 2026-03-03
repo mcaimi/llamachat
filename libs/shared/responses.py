@@ -173,3 +173,38 @@ def format_response(response) -> (str, str):
                 output_response += f"Response content: {output_item.content}"
 
     return output_response, tool_call_response
+
+
+def format_streaming_response(response) -> (str, str):
+    """
+    Function to format the response from the OpenAI API in streaming mode.
+
+    Returns:
+        tuple: A tuple containing two strings, the incremental formatted output and the eventual tool call response.
+    """
+
+    streaming_text_fragment = ""
+    response_callstack = ""
+
+    match (response.type):
+        case "response.output_text.delta":
+            streaming_text_fragment = f"{response.delta}"
+        case "response.in_progress"|"response.created":
+            pass
+        case "response.completed":
+            # format callstack fragment
+            response_callstack = dict_to_markdown_table(
+                {
+                    "ID": response.response.id,
+                    "Model": response.response.model,
+                    "Timestamp": response.response.created_at,
+                    "Status": response.response.status,
+                    "Input Tokens": f":violet-badge[{response.response.usage.input_tokens}]",
+                    "Output Tokens": f":orange-badge[{response.response.usage.output_tokens}]",
+                    "Total Tokens": f":grey-badge[{response.response.usage.total_tokens}]",
+                }
+            )
+        case _:
+            pass
+
+    return streaming_text_fragment, response_callstack

@@ -12,7 +12,7 @@ class AgentSession:
         self.continuity_id = None
 
     # perform inference, optionally with shields
-    def generate(self, prompt):
+    def generate(self, prompt, stream=False):
         if self.agent.sampling_params is None:
             sampling_params = {}
         else:
@@ -33,12 +33,25 @@ class AgentSession:
                     "message.output_text.logprobs",
                     "reasoning.encrypted_content",
                 ],
-            stream = False,
+            stream = stream,
             **sampling_params,
         )
 
-        self.continuity_id = api_response.id
-        return api_response
+        if (not stream):
+            self.continuity_id = api_response.id
+            return api_response
+        else:
+            for api_message in api_response:
+                match api_message.type:
+                    case "response.created":
+                        self.continuity_id = api_message.response.id
+                        yield api_message
+                    case "response.completed":
+                        self.continuity_id = api_message.response.id
+                        yield api_message
+                    case _:
+                        yield api_message
+            
 
     def forget(self):
         # reset continuity id and start from scratch
@@ -84,8 +97,8 @@ class Agent:
     def output_shield(self, prompt):
         return self._run_shield(self.output_shields, prompt)
 
-    def create_turn(self, prompt):
-        return self.session.generate(prompt)
+    def create_turn(self, prompt, stream=False):
+        return self.session.generate(prompt, stream=stream)
 
     def reset_turn(self):
         self.session.forget()

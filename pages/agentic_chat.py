@@ -20,7 +20,7 @@ try:
         from libs.shared.session import Session
         from libs.shared.agent import Agent, AgentSession
         from libs.shared.state import AgentMessage
-        from libs.shared.responses import format_response
+        from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
@@ -70,6 +70,7 @@ stSession.add_to_session_state(
     "max_output_tokens", appSettings.config_parameters.llm.max_output_tokens
 )
 stSession.add_to_session_state("timeout", appSettings.config_parameters.llm.timeout)
+stSession.add_to_session_state("stream", appSettings.config_parameters.openai.stream)
 
 # build streamlit UI
 st.set_page_config(
@@ -112,6 +113,8 @@ with st.sidebar:
                 agent_mode = "chat"
             case "**Agentic**":
                 agent_mode = "agent"
+
+        stream = st.checkbox(label="Stream Responses", value=stSession.session_state.stream)
 
     with st.expander("System Prompt"):
         new_prompt = st.text_area(
@@ -453,30 +456,51 @@ if prompt_raw:
                 flagged, output = chatAgent.input_shield(augmented_prompt)
 
             if not flagged:
+                message_placeholder = st.empty()
                 # chat with the ai agent
-                with st.spinner("🧠Thinking...."):
-                    response = chatAgent.create_turn(
-                        prompt=augmented_prompt
-                    )
+                if (not stream):
+                    with st.spinner("🧠Thinking...."):
+                        response = chatAgent.create_turn(
+                            prompt=augmented_prompt,
+                            stream=stream
+                        )
 
-                # parse responses
-                message_placeholder = st.empty()
-                prompt_response, tool_response = format_response(response)
+                    # parse responses
+                    prompt_response, tool_response = format_response(response)
 
-                # perform output shielding...
-                message_placeholder = st.empty()
-                with st.spinner("Running Output Shield..."):
-                    flagged, output = chatAgent.output_shield(prompt_response)
+                    # perform output shielding...
+                    with st.spinner("Running Output Shield..."):
+                        flagged, output = chatAgent.output_shield(prompt_response)
 
-                if flagged:
-                    # filter response
-                    prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
-                
-                message_placeholder.markdown(prompt_response)    
-                
-                with st.expander("Inference Stack"):
-                    retrieval_message_placeholder = st.empty()
-                    retrieval_message_placeholder.markdown(tool_response)
+                    if flagged:
+                        # filter response
+                        prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
+                    
+                    message_placeholder.markdown(prompt_response)    
+                    
+                    with st.expander("Inference Stack"):
+                        callstack_placeholder = st.empty()
+                        callstack_placeholder.markdown(tool_response)
+                else:
+                    prompt_response: str = ""
+                    callstack_response: str = ""
+                    for item in chatAgent.create_turn(
+                            prompt=augmented_prompt,
+                            stream=stream
+                        ):
+                        stream_fragment, callstack_fragment = format_streaming_response(item)
+
+                        # update generated message
+                        prompt_response += stream_fragment
+                        callstack_response += callstack_fragment
+
+                        # display progressive steaming message
+                        message_placeholder.markdown(prompt_response)
+                    
+                    # display callstack
+                    with st.expander("Inference Stack"):
+                        callstack_placeholder = st.empty()
+                        callstack_placeholder.markdown(callstack_response)
             else:
                 prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
                 message_placeholder = st.empty()

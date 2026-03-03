@@ -12,6 +12,7 @@ openai:
   model: "gpt-oss:20b"
   shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
+  stream: True
 
 whisper:
   model: "Whisper Tiny"
