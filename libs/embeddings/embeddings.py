@@ -2,7 +2,6 @@
 
 try:
     import mimetypes as mt
-    from llama_stack_client import LlamaStackClient
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat, DocumentStream
     from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -12,33 +11,6 @@ try:
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
-
-# create or register a collection in the vector db
-def registerVectorCollection(
-    embedClient: LlamaStackClient,
-    vectorDbId: str,
-    embeddingModel: str,
-    embeddingDim: int,
-    providerId: str,
-) -> None:
-    # call LlamaStack
-    embedClient.vector_dbs.register(
-        vector_db_id=vectorDbId,
-        vector_db_name=vectorDbId,
-        embedding_model=embeddingModel,
-        embedding_dimension=embeddingDim,
-        provider_id=providerId,
-    )
-
-# get vdb id by name
-def getVDBByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
-    dbs: list = [v.identifier for v in embedClient.vector_dbs.list() if v.vector_db_name == vdb_name]
-
-    # check...
-    if len(dbs) > 1:
-        raise Exception(f"{vdb_name} is declared in multiple entries: Alias Error")
-    else:
-        return dbs[0]
 
 def createDoclingConverter(
     do_ocr: bool,
@@ -133,6 +105,7 @@ def chunkFiles(converted_docs: list) -> list:
                 # append chunk to doc list
                 docs.append(
                     {
+                        "chunk_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}_chunk_{i}", 
                         "content": chunk_content,
                         "metadata": metadata,
                         "chunk_metadata": chunk_metadata,

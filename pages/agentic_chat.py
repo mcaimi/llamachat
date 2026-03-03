@@ -18,15 +18,15 @@ try:
         # local imports
         from libs.shared.settings import Properties
         from libs.shared.session import Session
+        from libs.shared.agent import Agent, AgentSession
+        from libs.shared.state import AgentMessage
+        from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
 # llama stack
-from llama_stack_client import LlamaStackClient, Agent, AgentEventLogger
-from llama_stack_client.lib.agents.react.agent import ReActAgent
-from llama_stack_client.lib.agents.react.tool_parser import ReActOutput
-from llama_stack_client.types import UserMessage, CompletionMessage
+from llama_stack_client import LlamaStackClient
 
 # load environment
 config_env: dict = dotenv_values(".env")
@@ -63,21 +63,18 @@ stSession.add_to_session_state(
 stSession.add_to_session_state(
     "temperature", appSettings.config_parameters.llm.temperature
 )
-stSession.add_to_session_state("top_p", appSettings.config_parameters.llm.top_p)
-stSession.add_to_session_state("n_comp", appSettings.config_parameters.llm.n_comp)
+stSession.add_to_session_state("max_infer_iters", appSettings.config_parameters.llm.max_infer_iters)
+stSession.add_to_session_state("max_tool_calls", appSettings.config_parameters.llm.max_tool_calls)
+stSession.add_to_session_state("parallel_tool_calls", appSettings.config_parameters.llm.parallel_tool_calls)
 stSession.add_to_session_state(
-    "max_tokens", appSettings.config_parameters.llm.max_tokens
+    "max_output_tokens", appSettings.config_parameters.llm.max_output_tokens
 )
-stSession.add_to_session_state(
-    "presence_penalty", appSettings.config_parameters.llm.presence_penalty
-)
-stSession.add_to_session_state(
-    "repeat_penalty", appSettings.config_parameters.llm.repeat_penalty
-)
+stSession.add_to_session_state("timeout", appSettings.config_parameters.llm.timeout)
+stSession.add_to_session_state("stream", appSettings.config_parameters.openai.stream)
 
 # build streamlit UI
 st.set_page_config(
-    page_title="🧠 RedHat Agentic AI Assistant",
+    page_title="🧠 Agentic AI Assistant",
     initial_sidebar_state="collapsed",
     layout="wide",
 )
@@ -91,7 +88,6 @@ with st.sidebar:
     # reset function
     def reset_agent():
         st.cache_resource.clear()
-        stSession.remove_from_session_state("agent_session_id")
 
     st.header("🛠 LLM Control Panel")
 
@@ -103,22 +99,22 @@ with st.sidebar:
 
         # select operation mode
         agentic_mode = st.radio(
-            "Select Agentic Mode",
-            ["**LlamaStack Agentic**", "**ReAct**"],
+            "Select Interaction Mode",
+            ["**LLM Chat**", "**Agentic**"],
             captions=[
-                "Use LlamaStack Agentic Framework",
-                "Use Reasoning Model to Improve Tool Calling",
+                "Chat with a model to answer questions and generate text.",
+                "Interact with tools and MCP servers.",
             ],
             on_change=reset_agent,
         )
 
         match agentic_mode:
-            case "**LlamaStack Agentic**":
-                agent_mode = "agentic"
-            case "**ReAct**":
-                agent_mode = "react"
+            case "**LLM Chat**":
+                agent_mode = "chat"
+            case "**Agentic**":
+                agent_mode = "agent"
 
-        enable_persistence = st.checkbox(label="Enable Session Persistence", value=True)
+        stream = st.checkbox(label="Stream Responses", value=stSession.session_state.stream)
 
     with st.expander("System Prompt"):
         new_prompt = st.text_area(
@@ -128,7 +124,7 @@ with st.sidebar:
             on_change=reset_agent,
         )
         if st.button("🔄 Apply New Prompt"):
-            stSession.session_state.system_prompt = new_prompt
+            stSession.update_system_prompt(new_prompt)
             st.success("System prompt updated.")
             reset_agent()
 
@@ -137,42 +133,40 @@ with st.sidebar:
             "🌡️ Temperature",
             0.0,
             2.0,
-            0.7,
+            appSettings.config_parameters.llm.temperature,
             0.05,
             on_change=reset_agent,
         )
-        stSession.session_state.top_p = st.slider(
-            "📊 Top-P",
-            0.0,
-            1.0,
-            0.9,
-            0.05,
-            on_change=reset_agent,
-        )
-        stSession.session_state.n_comp = st.text_input(
-            "Num Completions",
-            value=appSettings.config_parameters.llm.n_comp,
-            on_change=reset_agent,
-        )
-        stSession.session_state.max_tokens = st.text_input(
+        stSession.session_state.max_output_tokens = st.number_input(
             "🔁 Tokens",
-            value=appSettings.config_parameters.llm.max_tokens,
+            min_value = 16,
+            value=appSettings.config_parameters.llm.max_output_tokens,
             on_change=reset_agent,
         )
-        stSession.session_state.presence_penalty = st.slider(
-            "🔁 Presence Penalty",
-            -2.0,
-            2.0,
-            1.1,
-            0.1,
+        stSession.session_state.max_infer_iters = st.number_input(
+            "🔁 Max Inference Iterations",
+            min_value=1,
+            max_value=100,
+            value=appSettings.config_parameters.llm.max_infer_iters,
             on_change=reset_agent,
         )
-        stSession.session_state.repeat_penalty = st.slider(
-            "🔁 Repeat Penalty",
-            -2.0,
-            2.0,
-            1.1,
-            0.1,
+        stSession.session_state.max_tool_calls = st.number_input(
+            "Max Number of Tool Calls",
+            min_value=1,
+            max_value=100,
+            value=appSettings.config_parameters.llm.max_tool_calls,
+            on_change=reset_agent,
+        )
+        stSession.session_state.parallel_tool_calls = st.checkbox(
+            "Enable Parallel Tool Calls",
+            value=appSettings.config_parameters.llm.parallel_tool_calls,
+            on_change=reset_agent,
+        )
+        stSession.session_state.timeout = st.number_input(
+            "Inference Timeout",
+            min_value=30,
+            max_value=500,
+            value=appSettings.config_parameters.llm.timeout,
             on_change=reset_agent,
         )
 
@@ -180,123 +174,109 @@ with st.sidebar:
     st.markdown(f"**🔌 Current Model:** `{stSession.session_state.model_name}`")
     st.markdown(f"**🔌 Current Mode:** `{agent_mode}`")
 
-    if st.button("Clear Current Chat"):
-        stSession.session_state.agent_messages = []
+    if st.button("Reset Agent State"):
+        stSession.clear_chat_session()
+        reset_agent()
 
     st.divider()
-    with st.expander("🛠 Agentic"):
+    with st.expander("🛠 Advanced"):
         st.markdown("**Shields**")
         shield_models = stSession.list_models(model_type="shield")
-        input_shields = st.multiselect(
-            label="Input Shields", options=shield_models, on_change=reset_agent
+
+        # select input shields
+        in_shield_objects = st.multiselect(
+            label="Input Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
         )
-        output_shields = st.multiselect(
-            label="Output Shields", options=shield_models, on_change=reset_agent
+        input_shields = [m['model'] for m in shield_models if m['id'] in in_shield_objects]
+
+        # select output shields
+        out_shield_objects = st.multiselect(
+            label="Output Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
         )
+        output_shields = [m['model'] for m in shield_models if m['id'] in out_shield_objects]
 
-        st.markdown("**🔌 Agentic Workflow Capabilities**")
-        tool_groups = chatClient.toolgroups.list()
-        tool_groups_list = [tool_group.identifier for tool_group in tool_groups]
-        mcp_tools_list = [tool for tool in tool_groups_list if tool.startswith("mcp::")]
-        builtin_tools_list = [
-            tool for tool in tool_groups_list if not tool.startswith("mcp::")
-        ]
 
-        # MCP Servers comes first now
-        mcp_label_map = {
-            "mcp::tools": "MCP Tools",
-            "mcp::opencv": "OpenCV Toolkit",
-        }
-        mcp_display_options = [mcp_label_map.get(tool, tool) for tool in mcp_tools_list]
-        mcp_label_to_tool = {mcp_label_map.get(k, k): k for k in mcp_tools_list}
+        # if mode is Agent...
+        if agent_mode == "agent":
+            st.markdown("**🔌 Agentic Workflow Capabilities**")
+            # get a list of toolgroups * DEPRECATED API *
+            tool_groups = chatClient.toolgroups.list()
 
-        st.subheader("MCP Servers")
-        mcp_display_selection = st.pills(
-            label="Registered APIs",
-            options=mcp_display_options,
-            selection_mode="multi",
-            default=mcp_display_options,
-            on_change=reset_agent,
-        )
-        mcp_selection = [mcp_label_to_tool[label] for label in mcp_display_selection]
-
-        # Builtin Tools
-        builtin_label_map = {
-            "builtin::websearch": "Web search",
-            "builtin::rag": "Retrieval augmented generation",
-            "builtin::code_interpreter": "Code interpreter",
-            "builtin::wolfram_alpha": "Wolfram Alpha",
-        }
-        blt_display_options = [
-            builtin_label_map.get(tool, tool) for tool in builtin_tools_list
-        ]
-        blt_label_to_tool = {builtin_label_map.get(k, k): k for k in builtin_tools_list}
-
-        st.subheader("Builtin Tools")
-        blt_display_selection = st.pills(
-            label="Registered APIs",
-            options=blt_display_options,
-            selection_mode="multi",
-            on_change=reset_agent,
-        )
-        toolgroup_selection = [
-            blt_label_to_tool[label] for label in blt_display_selection
-        ]
-
-        # if rag is selected, also get a list of all collections in the database
-        if "builtin::rag" in toolgroup_selection:
-            vector_dbs = chatClient.vector_dbs.list() or []
-            if not vector_dbs:
-                st.info(
-                    "No vector databases available for selection. Create one using the Embedding Page."
-                )
-                selected_vector_dbs = []
-            else:
-                vector_dbs = [vector_db.vector_db_name for vector_db in vector_dbs]
-                selected_vector_dbs = st.multiselect(
-                    label="Select Document Collections to use in RAG queries",
-                    options=vector_dbs,
-                    on_change=reset_agent,
-                )
-
-        # add arguments to tools that need them
-        for i, tool_name in enumerate(toolgroup_selection):
-            match tool_name:
-                case "builtin::rag":
-                    tool_dict = dict(
-                        name="builtin::rag",
-                        args={
-                            "vector_db_ids": list([getVDBByName(chatClient, item) for item in selected_vector_dbs]),
-                        },
-                    )
-                    toolgroup_selection[i] = tool_dict
-                case "builtin::websearch":
-                    tool_dict = dict(
-                        name="builtin::websearch",
-                        args={
-                            "max_results": 10,
-                        },
-                    )
-                    toolgroup_selection[i] = tool_dict
-
-        # Final combined selection
-        toolgroup_selection.extend(mcp_selection)
-
-        # display active tools
-        active_tool_list = []
-        for toolgroup_id in toolgroup_selection:
-            if isinstance(toolgroup_id, dict):
-                toolgroup_id = toolgroup_id.get("name")
-
-            active_tool_list.extend(
-                [
-                    f"{''.join(toolgroup_id)}:{t.identifier}"
-                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
-                ]
+            # build list of available MCP endpoints
+            mcp_tools_list = [
+                {
+                    "type": "mcp",
+                    "server_url": tool.mcp_endpoint.uri,
+                    "server_label": tool.identifier
+                }
+                for tool in tool_groups if tool.identifier.startswith("mcp::")
+            ]
+            
+            # MCP Servers comes first now
+            st.subheader("MCP Servers")
+            mcp_selection = st.pills(
+                label="Registered APIs",
+                options=[t.get("server_label") for t in mcp_tools_list],
+                default=[t.get("server_label") for t in mcp_tools_list],
+                selection_mode="multi",
+                on_change=reset_agent,
             )
-        with st.expander("🛠 AI Tool Info...", expanded=False):
-            st.subheader(f"Active Tools: {len(active_tool_list)}")
-            st.json(active_tool_list)
+
+            # Final combined selection
+            toolgroup_selection = []
+            toolgroup_selection.extend([tool for tool in mcp_tools_list if tool.get("server_label") in mcp_selection])
+
+            # rag capability
+            enable_rag = st.checkbox(
+                "Enable RAG",
+                value=False,
+                on_change=reset_agent
+            )
+
+            # display available vector ids
+            vector_ids = st.multiselect(
+                "Select Vector Databases",
+                options=[vector_db.name for vector_db in chatClient.vector_stores.list()],
+                disabled=not enable_rag
+            )
+
+            if enable_rag:
+                toolgroup_selection.extend([{
+                        "type": "file_search",
+                        "vector_store_ids": [v.id for v in chatClient.vector_stores.list() if v.name in vector_ids] or [],
+                    }]
+                )
+
+            # display active tools
+            active_tool_list = []
+            for toolgroup_id in toolgroup_selection:
+                if isinstance(toolgroup_id, dict):
+                    tool_type = toolgroup_id.get("type")
+
+                    match tool_type:
+                        case "mcp":
+                            toolgroup_id = toolgroup_id.get("server_label")
+
+                            active_tool_list.extend(
+                                [
+                                    f"{''.join(toolgroup_id)}:{t.name}"
+                                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
+                                ]
+                            )
+                        case "file_search":
+                            vector_ids = toolgroup_id.get("vector_store_ids")
+                            active_tool_list.extend(
+                                [
+                                    f"inline::file_search::{vector_ids}"
+                                ]
+                            )
+
+            with st.expander("🛠 AI Tool Info...", expanded=False):
+                st.subheader(f"Active Tools: {len(active_tool_list)}")
+                st.json(active_tool_list)
+        else:
+            toolgroup_selection = None
+
 
     st.divider()
     with st.expander("💾 Save Chat Log..."):
@@ -342,63 +322,54 @@ with st.sidebar:
 
 # inference parameters
 inference_parms = {
-    "max_tokens": stSession.session_state.max_tokens,
-    "n": stSession.session_state.n_comp,
-    "strategy": {
-        "type": "top_p",
-        "temperature": stSession.session_state.temperature,
-        "top_p": stSession.session_state.top_p,
-    },
-    "presence_penalty": stSession.session_state.presence_penalty,
-    "frequency_penalty": stSession.session_state.repeat_penalty,
+    #"max_output_tokens": int(stSession.session_state.max_output_tokens),
+    "temperature": float(stSession.session_state.temperature),
+    "timeout": int(stSession.session_state.timeout),
+    "max_infer_iters": int(stSession.session_state.max_infer_iters),
+    "max_tool_calls": int(stSession.session_state.max_tool_calls),
+    "parallel_tool_calls": bool(stSession.session_state.parallel_tool_calls),
 }
-
 
 # Define Agent for AI Interaction
 @st.cache_resource
-def instantiate_ai_agent(model_name, sysPrompt, availableTools, inferenceParms):
+def instantiate_ai_agent(_client,
+                        model_name,
+                        instructions,
+                        tools,
+                        parameters,
+                        input_shields,
+                        output_shields,
+                        inferenceParms):
     match agent_mode:
-        case "agentic":
+        case "chat":
             return Agent(
-                chatClient,
-                model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""",
-                tools=availableTools,
-                tool_config={"tool_choice": "auto"},
-                sampling_params=inferenceParms,
-                # Configure safety (optional)
+                llamastack_client = _client,
+                model = model_name,
+                instructions = f"""{instructions}.""",
                 input_shields=input_shields,
                 output_shields=output_shields,
-                enable_session_persistence=enable_persistence,
+                sampling_params=inferenceParms,
             )
-        case "react":
-            return ReActAgent(
-                chatClient,
-                model=model_name,
-                instructions=f"""{sysPrompt}. You have tools available that you can use to respond to the user.""",
-                tools=availableTools,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": ReActOutput.model_json_schema(),
-                },
-                tool_config={"tool_choice": "auto"},
-                sampling_params=inferenceParms,
+        case "agent":
+            return Agent(
+                llamastack_client = _client,
+                model = model_name,
+                instructions = f"""{instructions}. You have tools available that you can use to respond to the user.""",
+                tools=tools,
                 input_shields=input_shields,
                 output_shields=output_shields,
-                enable_session_persistence=enable_persistence,
+                sampling_params=inferenceParms,
             )
 
 chatAgent = instantiate_ai_agent(
-    stSession.session_state.model_name,
-    stSession.session_state.system_prompt,
-    toolgroup_selection,
-    inference_parms,
-)
-
-# create local agent session to maintain memory
-stSession.add_to_session_state(
-    "agent_session_id",
-    chatAgent.create_session(session_name=f"agent_session_{uuid.uuid4()}"),
+    _client = chatClient,
+    model_name = stSession.session_state.model_name,
+    instructions = stSession.session_state.system_prompt,
+    tools = toolgroup_selection,
+    parameters = inference_parms,
+    input_shields=input_shields,
+    output_shields=output_shields,
+    inferenceParms=inference_parms
 )
 
 # Chat Interface
@@ -435,15 +406,27 @@ if prompt_raw:
 
                         # base64 encoding
                         im_b64 = base64.b64encode(f.read()).decode("utf-8")
+                        # image entity in content
+                        img_entity = {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{im_b64}",
+                        }
+                        # text entity_in content
+                        txt_entity = {
+                            "type": "input_text",
+                            "text": f"{prompt}",
+                        }
 
                         # update prompt:
-                        augmented_prompt = []
-                        augmented_prompt.append({"type": "text", "text": f"{prompt}."})
-                        augmented_prompt.append(
-                            {"type": "image", "image": {"data": im_b64}}
-                        )
+                        augmented_prompt = [{
+                            "role": "user",
+                            "content": [
+                                txt_entity,
+                                img_entity
+                            ]
+                        }]
                     else:
-                        with st.spinner(f"🧠 Embedding.... {f.name}"):
+                        with st.spinner(f"🧠 Creating Docling Converter.... {f.name}"):
                             # instantiate converter
                             converter = createDoclingConverter(
                                 do_ocr=False, do_table_structure=True
@@ -458,47 +441,78 @@ if prompt_raw:
                                 ).document.export_to_markdown()
 
                             # update prompt...
-                            augmented_prompt += f"Your context is: {augmented_query}"
+                            augmented_prompt += f"What follows is the context you have to use to answer the question: {augmented_query}"
 
                             del converter
                         st.markdown("** Conversion Done! **")
 
             # append user request
             stSession.session_state.agent_messages.append(
-                UserMessage(content=prompt, role="user")
+                AgentMessage(_content=prompt, _role="user")
             )
 
-            # chat with the ai agent
-            with st.spinner("🧠Thinking...."):
-                response = chatAgent.create_turn(
-                    messages=[{"role": "user", "content": augmented_prompt}],
-                    session_id=stSession.session_state.agent_session_id,
-                    stream=True,
-                )
+            # run input shield...
+            with st.spinner("Running Input Shield..."):
+                flagged, output = chatAgent.input_shield(augmented_prompt)
 
-            # parse responses
-            message_placeholder = st.empty()
-            full_response = ""
-            retrieval_response = ""
-            for log in AgentEventLogger().log(response):
-                if log.role == "tool_execution":
-                    retrieval_response += log.content.replace("====", "").strip()
+            if not flagged:
+                message_placeholder = st.empty()
+                # chat with the ai agent
+                if (not stream):
+                    with st.spinner("🧠Thinking...."):
+                        response = chatAgent.create_turn(
+                            prompt=augmented_prompt,
+                            stream=stream
+                        )
+
+                    # parse responses
+                    prompt_response, tool_response = format_response(response)
+
+                    # perform output shielding...
+                    with st.spinner("Running Output Shield..."):
+                        flagged, output = chatAgent.output_shield(prompt_response)
+
+                    if flagged:
+                        # filter response
+                        prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
+                    
+                    message_placeholder.markdown(prompt_response)    
+                    
+                    with st.expander("Inference Stack"):
+                        callstack_placeholder = st.empty()
+                        callstack_placeholder.markdown(tool_response)
                 else:
-                    full_response += log.content
-                    message_placeholder.markdown(full_response + "▌")
+                    prompt_response: str = ""
+                    callstack_response: str = ""
+                    for item in chatAgent.create_turn(
+                            prompt=augmented_prompt,
+                            stream=stream
+                        ):
+                        stream_fragment, callstack_fragment = format_streaming_response(item)
 
-            message_placeholder.markdown(full_response)
+                        # update generated message
+                        prompt_response += stream_fragment
+                        callstack_response += callstack_fragment
 
-            with st.expander("Tool Call Info"):
-                retrieval_message_placeholder = st.empty()
-                retrieval_message_placeholder.markdown(retrieval_response)
+                        # display progressive steaming message
+                        message_placeholder.markdown(prompt_response)
+                    
+                    # display callstack
+                    with st.expander("Inference Stack"):
+                        callstack_placeholder = st.empty()
+                        callstack_placeholder.markdown(callstack_response)
+            else:
+                prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
+                message_placeholder = st.empty()
+                message_placeholder.markdown(prompt_response)
+            
         except Exception as e:
             st.error(f"Request failed: {e}")
 
         # add to history
         stSession.session_state.agent_messages.append(
-            CompletionMessage(
-                role="assistant", content=full_response, stop_reason="end_of_turn"
+            AgentMessage(
+                _role="assistant", _content=prompt_response
             )
         )
 

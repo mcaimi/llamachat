@@ -1,27 +1,18 @@
 ---
-interface:
-  agentic: True
-
 vectorstore:
   score: 0.6
   max_objects: 10
-  mode: "vector"
-  embedding_dimensions: 384
-  query_mode: "default"
-  collection: "redhat_collection"
-  provider: "inline-milvus"
-  embedding_model: "sentence-transformers"
-  chunk_size_in_tokens: 512
+  embedding_dimensions: 768
   embedding_timeout: 3600
 
 openai:
   default_local_api: "http://localhost:8321"
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
-  model: "tool-calling"
+  model: "gpt-oss:20b"
   shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
-  timeout: 120
+  stream: True
 
 whisper:
   model: "Whisper Tiny"
@@ -54,17 +45,16 @@ huggingface:
   cache_dir: "/tmp/cache/huggingface"
 
 features:
-  enable_rag: True
-  enable_shields: False
+  enable_rag: False
   supported_data_formats: ["pdf", "xlsx", "docx", "md", "html"]
   supported_img_formats: ["jpg", "png"]
   supported_audio_formats: ["mp3", "wav"]
 
 llm:
   temperature: 0.8
-  top_p: 0.9
-  max_tokens: 1024
-  presence_penalty: 1.1
-  repeat_penalty: 1.1
-  n_comp: 1
+  timeout: 120
+  max_output_tokens: 1024
+  max_infer_iters: 5
+  max_tool_calls: 5
+  parallel_tool_calls: False
   system_prompt: "You are an helpful assistant able to perform different tasks. You have tools at your disposal and can use them in order to solve the task at hand. If you cannot respond please tell that you do not know the answer. Use the following context to answer the question."

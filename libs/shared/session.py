@@ -5,8 +5,8 @@ try:
     import requests
     from datetime import datetime
     from streamlit import warning
-    from llama_stack_client.types import UserMessage, SystemMessage, CompletionMessage
     from .utils import build_header
+    from .state import AgentMessage
 except Exception as e:
     raise e
 
@@ -19,10 +19,7 @@ class Session(object):
         with open(os.path.join(self.streamlit_session.history_dir, filename), "w") as f:
             json_document = []
             for item in chat_data:
-                if type(item) == CompletionMessage:
-                    json_document.append({"role": item.role, "content": item.content, "stop_reason": item.stop_reason})
-                else:
-                    json_document.append({"role": item.role, "content": item.content})
+                json_document.append({"role": item.role, "content": item.content})
 
             # dump data to json    
             json.dump(json_document, f, indent=2)
@@ -46,12 +43,10 @@ class Session(object):
             for item in json_document:
                 if type(item) == dict and "content" in item:
                     match item["role"]:
-                        case "system":
-                            chat_history.insert(0, SystemMessage(content=item["content"], role="system"))
                         case "user":
-                            chat_history.append(UserMessage(content=item["content"], role="user"))
+                            chat_history.append(AgentMessage(_content=item["content"], _role="user"))
                         case "assistant":
-                            chat_history.append(CompletionMessage(content=item["content"], role="assistant", stop_reason=item["stop_reason"]))
+                            chat_history.append(AgentMessage(_content=item["content"], _role="assistant"))
 
         # return rebuilt history
         return chat_history    
@@ -71,6 +66,7 @@ class Session(object):
     def providers_endpoint(self) -> str:
         return f"{self.streamlit_session.api_base_url}/v1/providers"
 
+    # LIST METHODS
     def list_providers(self, provider_type: str = "vector_io", timeout: int = 10) -> list:
         detected_providers = []
         if provider_type not in ["inference", "vector_io", "agents"]:
@@ -100,9 +96,16 @@ class Session(object):
 
             if resp.status_code == 200:
                 if model_type == "shield":
-                    models = [m['identifier'] for m in resp.json().get('data', []) if m['type'] == model_type]
+                    models = [
+                        {
+                            "id": m['identifier'],
+                            "provider": m["provider_id"],
+                            "model": m['provider_resource_id']
+                        }
+                        for m in resp.json().get('data', []) if m['type'] == model_type
+                    ]
                 else:
-                    models = [m['identifier'] for m in resp.json().get('data', []) if m['model_type'] == model_type]
+                    models = [m['id'] for m in resp.json().get('data', []) if m['custom_metadata']['model_type'] == model_type]
                 if models:
                     detected_models = models
             return detected_models
@@ -119,10 +122,7 @@ class Session(object):
             del self.streamlit_session[key]
 
     def clear_chat_session(self) -> None:
-        self.session_state.messages = [SystemMessage(content=self.session_state.system_prompt, role="system")]
+        self.session_state.agent_messages = []
 
     def update_system_prompt(self, new_prompt: str) -> None:
         self.session_state.system_prompt = new_prompt
-        for i, msg in enumerate(self.session_state.messages):
-            if type(msg) == SystemMessage:
-                self.session_state.messages[i] = SystemMessage(content=new_prompt, role="system")
