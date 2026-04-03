@@ -20,6 +20,7 @@ try:
         from libs.shared.session import Session
         from libs.shared.agent import Agent, AgentSession
         from libs.shared.state import AgentMessage
+        from libs.shared.connectors_wrapper import ConnectorEntity, ConnectorsAPI
         from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
@@ -82,6 +83,7 @@ st.html("assets/header.html")
 
 # instantiate llamastack connection
 chatClient = LlamaStackClient(base_url=stSession.session_state.api_base_url)
+connectorsClient = ConnectorsAPI(url=stSession.session_state.api_base_url)
 
 # Sidebar
 with st.sidebar:
@@ -199,32 +201,33 @@ with st.sidebar:
         # if mode is Agent...
         if agent_mode == "agent":
             st.markdown("**🔌 Agentic Workflow Capabilities**")
-            # get a list of toolgroups * DEPRECATED API *
-            tool_groups = chatClient.toolgroups.list()
+            # get a list of tools
+            tools = chatClient.tools.list()
+            connectors = connectorsClient.list()
 
             # build list of available MCP endpoints
-            mcp_tools_list = [
-                {
-                    "type": "mcp",
-                    "server_url": tool.mcp_endpoint.uri,
-                    "server_label": tool.identifier
-                }
-                for tool in tool_groups if tool.identifier.startswith("mcp::")
-            ]
-            
+            mcp_tools_list = [tool for tool in connectors if tool.connector_id.startswith("mcp::")]
+
             # MCP Servers comes first now
             st.subheader("MCP Servers")
             mcp_selection = st.pills(
                 label="Registered APIs",
-                options=[t.get("server_label") for t in mcp_tools_list],
-                default=[t.get("server_label") for t in mcp_tools_list],
+                options=[t.server_label for t in mcp_tools_list],
+                default=[t.server_label for t in mcp_tools_list],
                 selection_mode="multi",
                 on_change=reset_agent,
             )
 
             # Final combined selection
             toolgroup_selection = []
-            toolgroup_selection.extend([tool for tool in mcp_tools_list if tool.get("server_label") in mcp_selection])
+            toolgroup_selection.extend([
+                {
+                    "type": "mcp",
+                    "server_url": tool.url,
+                    "server_label": tool.server_label,
+                }
+                for tool in mcp_tools_list if tool.server_label in mcp_selection
+            ])
 
             # rag capability
             enable_rag = st.checkbox(
@@ -248,28 +251,15 @@ with st.sidebar:
                 )
 
             # display active tools
-            active_tool_list = []
-            for toolgroup_id in toolgroup_selection:
-                if isinstance(toolgroup_id, dict):
-                    tool_type = toolgroup_id.get("type")
-
-                    match tool_type:
-                        case "mcp":
-                            toolgroup_id = toolgroup_id.get("server_label")
-
-                            active_tool_list.extend(
-                                [
-                                    f"{''.join(toolgroup_id)}:{t.name}"
-                                    for t in chatClient.tools.list(toolgroup_id=toolgroup_id)
-                                ]
-                            )
-                        case "file_search":
-                            vector_ids = toolgroup_id.get("vector_store_ids")
-                            active_tool_list.extend(
-                                [
-                                    f"inline::file_search::{vector_ids}"
-                                ]
-                            )
+            active_tool_list = [f"{t.toolgroup_id}:{t.name}" for t in tools]
+            for tool_entity in toolgroup_selection:
+                match tool_entity.get("type"):
+                    case "mcp":
+                        active_tool_list.extend(
+                            [
+                                f"{tool_entity.get('type')}:{tool_entity.get('server_label')}"
+                            ]
+                        )
 
             with st.expander("🛠 AI Tool Info...", expanded=False):
                 st.subheader(f"Active Tools: {len(active_tool_list)}")

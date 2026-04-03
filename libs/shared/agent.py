@@ -31,7 +31,7 @@ class AgentSession:
                     "file_search_call.results",
                     "message.input_image.image_url",
                     "message.output_text.logprobs",
-                    "reasoning.encrypted_content",
+                    #"reasoning.encrypted_content",
                 ],
             stream = stream,
             **sampling_params,
@@ -51,7 +51,6 @@ class AgentSession:
                         yield api_message
                     case _:
                         yield api_message
-            
 
     def forget(self):
         # reset continuity id and start from scratch
