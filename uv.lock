@@ -984,7 +984,7 @@ wheels = [
 
 [[package]]
 name = "llama-stack-client"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -1003,9 +1003,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b7/e9/62dc71e7d6003d9b56a1e632445065f55687c891e62eff1636e10b5dd629/llama_stack_client-0.6.0.tar.gz", hash = "sha256:3290aac36dcafbd1bc0baaf995522e2037f57056672b5a1516af112a4210f3ea", size = 368695, upload-time = "2026-03-11T15:04:19.267Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a5/69/29310ddbb4f28322e56c4f802fe6e51b90fb9b4a4537b30254782ab565c0/llama_stack_client-0.7.0.tar.gz", hash = "sha256:099b783878afe5b2d4b4cc2821ea13620ae89fe76fdb83ef6111833390ad4df8", size = 376954, upload-time = "2026-04-01T20:54:51.555Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/83/a3/33d3e066a320a993b6f9cca9c8efe8da7deb2045df61235d327d0a05b25f/llama_stack_client-0.6.0-py3-none-any.whl", hash = "sha256:7e514a6ffd92f237aceb062dadc4db44e24a3cd9c4ea35e25173d1e0739beb8e", size = 392001, upload-time = "2026-03-11T15:04:17.772Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/4e/4c4dfc82eb4734b916248adc4a0ac9932ce25d4b764e9d9e5b0318f3b68a/llama_stack_client-0.7.0-py3-none-any.whl", hash = "sha256:836ddbf809eab9db66a86669e753df78b9e8cf5f9f460349a0fac5657535bd46", size = 399897, upload-time = "2026-04-01T20:54:49.905Z" },
 ]
 
 [[package]]
@@ -1036,7 +1036,7 @@ requires-dist = [
     { name = "ffmpeg", specifier = ">=1.4" },
     { name = "huggingface-hub", specifier = ">=0.34.4" },
     { name = "kokoro", specifier = ">=0.9.4" },
-    { name = "llama-stack-client", specifier = "==0.6.0" },
+    { name = "llama-stack-client", specifier = "==0.7.0" },
     { name = "matplotlib", specifier = ">=3.10.5" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "pdfplumber", specifier = ">=0.11.7" },
