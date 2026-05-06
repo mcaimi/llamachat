@@ -47,9 +47,9 @@ class ShieldOutput:
         return self.msg
 
 class ShieldEvaluation:
-    def __init__(self, shield, llamastackClient):
+    def __init__(self, shield, ogxClient):
         self.shield = shield
-        self.client = llamastackClient
+        self.client = ogxClient
 
     def evaluate(self, prompt):
         shield_response = self.client.moderations.create(

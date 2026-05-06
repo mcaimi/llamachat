@@ -51,7 +51,6 @@ class AgentSession:
                         yield api_message
                     case _:
                         yield api_message
-            
 
     def forget(self):
         # reset continuity id and start from scratch
@@ -59,7 +58,7 @@ class AgentSession:
 
 class Agent:
     def __init__(self,
-                llamastack_client,
+                ogx_client,
                 model,
                 instructions,
                 tools = None,
@@ -68,7 +67,7 @@ class Agent:
                 sampling_params: dict = None):
         self.model = model
         self.instructions = instructions
-        self.client = llamastack_client
+        self.client = ogx_client
         self.tools = tools
         self.input_shields = input_shields
         self.output_shields = output_shields

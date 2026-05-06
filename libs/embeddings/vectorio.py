@@ -1,13 +1,13 @@
 #!/usr/local/env python
 
 try:
-    from llama_stack_client import LlamaStackClient
+    from ogx_client import OgxClient
 except Exception as e:
     print(f"Caught fatal exception: {e}") 
 
 # create or register a collection in the vector db
 def registerVectorCollection(
-    embedClient: LlamaStackClient,
+    embedClient: OgxClient,
     vectorDbId: str,
     embeddingModel: str,
     embeddingDim: int,
@@ -24,7 +24,7 @@ def registerVectorCollection(
     )
 
 # get vdb id by name
-def getVdbIdByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
+def getVdbIdByName(embedClient: OgxClient, vdb_name: str) -> str:
     dbs: list = [v.id for v in embedClient.vector_stores.list().data if v.name == vdb_name]
 
     # check...
@@ -34,7 +34,7 @@ def getVdbIdByName(embedClient: LlamaStackClient, vdb_name: str) -> str:
         return dbs[0]
 
 # compute embeddings from a list of string inputs
-def computeEmbeddings(embedClient: LlamaStackClient, inputList: list, vdb_name: str):
+def computeEmbeddings(embedClient: OgxClient, inputList: list, vdb_name: str):
     if len(inputList) == 0:
         return []
 
