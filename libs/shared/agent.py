@@ -31,7 +31,7 @@ class AgentSession:
                     "file_search_call.results",
                     "message.input_image.image_url",
                     "message.output_text.logprobs",
-                    #"reasoning.encrypted_content",
+                    "reasoning.encrypted_content",
                 ],
             stream = stream,
             **sampling_params,
@@ -58,7 +58,7 @@ class AgentSession:
 
 class Agent:
     def __init__(self,
-                llamastack_client,
+                ogx_client,
                 model,
                 instructions,
                 tools = None,
@@ -67,7 +67,7 @@ class Agent:
                 sampling_params: dict = None):
         self.model = model
         self.instructions = instructions
-        self.client = llamastack_client
+        self.client = ogx_client
         self.tools = tools
         self.input_shields = input_shields
         self.output_shields = output_shields

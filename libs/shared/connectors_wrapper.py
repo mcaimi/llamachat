@@ -1,8 +1,8 @@
 #/usr/bin/env python
 #
-# Wrapper for the connections API in LlamaStack
+# Wrapper for APIs in OGX
 #
-#   http://llamastack-endpoint:port/v1beta/connections
+#   eg: http://ogx-endpoint:port/v1beta/connections
 #
 
 try:
@@ -12,11 +12,13 @@ except ImportError as e:
     print(f"Error importing libraries: {e}")
 
 
-# wrapper for the ConnectorEntity object
-class ConnectorEntity(object):
+# wrapper for the Entity object
+class Entity(object):
     """
+        Example: for connections APIs:
+
         Wrap and maintain a description of a connector
-        registered into the llamastack config definition file.
+        registered into the ogx config definition file.
 
         apis:
         - connectors
@@ -36,32 +38,31 @@ class ConnectorEntity(object):
                   provider_type: inline::model-context-protocol
                   config: {}
     """
-    def __init__(self, connectorItem: dict):
-        if not isinstance(connectorItem, dict):
-            raise RuntimeError("Wrong type, connectorItem must be dict")
+    def __init__(self, item: dict):
+        if not isinstance(item, dict):
+            raise RuntimeError("Wrong type, item must be dict")
 
         # parse dictionary
-        self.connectorItem = connectorItem
-        for key in self.connectorItem.keys():
-            setattr(self, key, self.connectorItem.get(key))
+        self.item = item
+        for key in self.item.keys():
+            setattr(self, key, self.item.get(key))
 
 
-# connections api manager
-class ConnectorsAPI(object):
+# Wrapper api manager
+class WrapperAPI(object):
     """
-        Manages connections to the connectors endpoint
-        /v1beta/connectors
+        Manages connections to API endpoints
     """
-    def __init__(self, url, endpoint: str = "/v1beta/connectors", verify: bool = False):
+    def __init__(self, url, remote_endpoint: str, verify: bool = False):
         self.verify = False
-        self.llamaUrl = url
-        self.llamaEndpoint = endpoint
-        self.connectorsEndpoint = f"{self.llamaUrl}/{self.llamaEndpoint}"
+        self.ogxUrl = url
+        self.ogxEndpoint = remote_endpoint
+        self.endpoint = f"{self.ogxUrl}/{self.ogxEndpoint}"
 
     # connections list
     def list(self) -> list:
         try:
-            response = requests.get(self.connectorsEndpoint, verify=self.verify)
+            response = requests.get(self.endpoint, verify=self.verify)
         except Exception as e:
             raise e
 
@@ -69,6 +70,16 @@ class ConnectorsAPI(object):
         # parse response
         if response.status_code == 200:
             rJson = response.json()
-            return [ConnectorEntity(item) for item in rJson.get("data")]
+            return [Entity(item) for item in rJson.get("data")]
         else:
             return []
+
+# Connections API Wrapper
+class ConnectorsAPI(WrapperAPI):
+    def __init__(self, url: str, verify: bool = False):
+        super().__init__(url=url, remote_endpoint="/v1beta/connectors", verify=verify)
+
+# Tools API Wrapper
+class ToolsAPI(WrapperAPI):
+    def __init__(self, url: str, verify: bool = False):
+        super().__init__(url=url, remote_endpoint="/v1/tools", verify=verify)
