@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 #
-# Agentic Chat. Use llama-stack agentic framework to chat with an AI model,
+# Agentic Chat. Use ogx agentic framework to chat with an AI model,
 # with optional features such as tools, shields and rag.
-# Streamlit version + llamastack backend
+# Streamlit version + ogx backend
 #
 
 import os
@@ -20,14 +20,14 @@ try:
         from libs.shared.session import Session
         from libs.shared.agent import Agent, AgentSession
         from libs.shared.state import AgentMessage
-        from libs.shared.connectors_wrapper import ConnectorEntity, ConnectorsAPI
+        from libs.shared.connectors_wrapper import Entity, ConnectorsAPI, ToolsAPI
         from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
-# llama stack
-from llama_stack_client import LlamaStackClient
+# OGX
+from ogx_client import OgxClient
 
 # load environment
 config_env: dict = dotenv_values(".env")
@@ -81,9 +81,10 @@ st.set_page_config(
 )
 st.html("assets/header.html")
 
-# instantiate llamastack connection
-chatClient = LlamaStackClient(base_url=stSession.session_state.api_base_url)
+# instantiate ogx connection
+chatClient = OgxClient(base_url=stSession.session_state.api_base_url)
 connectorsClient = ConnectorsAPI(url=stSession.session_state.api_base_url)
+toolsClient = ToolsAPI(url=stSession.session_state.api_base_url)
 
 # Sidebar
 with st.sidebar:
@@ -202,7 +203,7 @@ with st.sidebar:
         if agent_mode == "agent":
             st.markdown("**🔌 Agentic Workflow Capabilities**")
             # get a list of tools
-            tools = chatClient.tools.list()
+            tools = toolsClient.list()
             connectors = connectorsClient.list()
 
             # build list of available MCP endpoints
@@ -333,7 +334,7 @@ def instantiate_ai_agent(_client,
     match agent_mode:
         case "chat":
             return Agent(
-                llamastack_client = _client,
+                ogx_client = _client,
                 model = model_name,
                 instructions = f"""{instructions}.""",
                 input_shields=input_shields,
@@ -342,7 +343,7 @@ def instantiate_ai_agent(_client,
             )
         case "agent":
             return Agent(
-                llamastack_client = _client,
+                ogx_client = _client,
                 model = model_name,
                 instructions = f"""{instructions}. You have tools available that you can use to respond to the user.""",
                 tools=tools,

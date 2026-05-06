@@ -5,7 +5,7 @@ try:
     from dotenv import dotenv_values
     from libs.shared.settings import Properties
     from libs.shared.session import Session
-    from llama_stack_client import LlamaStackClient
+    from ogx_client import OgxClient
 
     with st.spinner("**Loading Docling Backend...**"):
         from libs.embeddings.embeddings import *
@@ -32,8 +32,8 @@ st.set_page_config(
 )
 st.html("assets/embeddings.html")
 
-# llamastack client
-embedClient = LlamaStackClient(base_url=stSession.session_state.api_base_url)
+# ogx client
+embedClient = OgxClient(base_url=stSession.session_state.api_base_url)
 
 # file uploader
 st.subheader("Upload Documents", divider=True)
