@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 
-import os, json
+import os
+import json
+import re
+import tempfile
+from typing import Any, Iterable, Optional
 try:
     import requests
     from datetime import datetime
@@ -15,14 +19,82 @@ class Session(object):
         self.streamlit_session = session_state
         self.session_state = self.streamlit_session
 
-    def save_chat_history(self, filename, chat_data):
-        with open(os.path.join(self.streamlit_session.history_dir, filename), "w") as f:
-            json_document = []
-            for item in chat_data:
-                json_document.append({"role": item.role, "content": item.content})
+    def _ensure_history_dir(self) -> str:
+        history_dir = getattr(self.streamlit_session, "history_dir", None)
+        if not history_dir or not isinstance(history_dir, str):
+            raise ValueError("history_dir is not configured.")
+        os.makedirs(history_dir, exist_ok=True)
+        return history_dir
 
-            # dump data to json    
-            json.dump(json_document, f, indent=2)
+    def _safe_filename(self, filename: str, required_ext: Optional[str] = None) -> str:
+        if not filename or not isinstance(filename, str):
+            raise ValueError("Filename is required.")
+
+        trimmed = filename.strip()
+        if not trimmed:
+            raise ValueError("Filename is empty.")
+
+        # block traversal / absolute paths on *nix + Windows, and NULs
+        if "\x00" in trimmed:
+            raise ValueError("Invalid filename.")
+        if os.path.isabs(trimmed):
+            raise ValueError("Absolute paths are not allowed.")
+        if trimmed != os.path.basename(trimmed):
+            raise ValueError("Path separators are not allowed in filename.")
+        if ".." in trimmed:
+            raise ValueError("Parent path segments are not allowed in filename.")
+
+        # Restrict to a conservative character set; keep it readable.
+        safe = re.sub(r"[^A-Za-z0-9._-]+", "_", trimmed)
+        safe = safe.lstrip("._-")
+        if not safe:
+            raise ValueError("Filename is invalid.")
+
+        if required_ext:
+            ext = required_ext if required_ext.startswith(".") else f".{required_ext}"
+            if not safe.lower().endswith(ext.lower()):
+                safe = f"{safe}{ext}"
+
+        return safe
+
+    def _history_path(self, filename: str, required_ext: Optional[str] = None) -> str:
+        history_dir = self._ensure_history_dir()
+        safe_name = self._safe_filename(filename, required_ext=required_ext)
+        return os.path.join(history_dir, safe_name)
+
+    def save_chat_history(self, filename, chat_data) -> str:
+        final_path = self._history_path(filename, required_ext=".json")
+
+        json_document = []
+        for item in chat_data:
+            role = getattr(item, "role", None)
+            content = getattr(item, "content", None)
+            json_document.append({"role": role, "content": content})
+
+        # Atomic write to avoid corrupting autosave on interruption.
+        history_dir = os.path.dirname(final_path)
+        tmp_file = tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            delete=False,
+            dir=history_dir,
+            prefix=".tmp_chat_",
+            suffix=".json",
+        )
+        try:
+            with tmp_file as f:
+                json.dump(json_document, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_file.name, final_path)
+        finally:
+            try:
+                if os.path.exists(tmp_file.name):
+                    os.unlink(tmp_file.name)
+            except Exception:
+                pass
+
+        return final_path
 
     def export_chat_to_markdown(self, md_filename, chat_data):
         markdown_output = ""
@@ -30,29 +102,47 @@ class Session(object):
             role = msg.role.capitalize()
             content = msg.content
             markdown_output += f"### {role}\n\n{content}\n\n"
-            # export to markdown
-            with open(os.path.join(self.session_state.history_dir, md_filename), "w", encoding="utf-8") as f:
-                f.write(markdown_output)
+        final_path = self._history_path(md_filename, required_ext=".md")
+        with open(final_path, "w", encoding="utf-8") as f:
+            f.write(markdown_output)
+        return final_path
 
     def load_chat_history(self, filename):
         # rebuild chat history
         chat_history = []
-        with open(os.path.join(self.streamlit_session.history_dir, filename), "r") as f:
-            json_document = json.load(f)
-            # iterate over messages          
-            for item in json_document:
-                if type(item) == dict and "content" in item:
-                    match item["role"]:
-                        case "user":
-                            chat_history.append(AgentMessage(_content=item["content"], _role="user"))
-                        case "assistant":
-                            chat_history.append(AgentMessage(_content=item["content"], _role="assistant"))
+        path = self._history_path(filename, required_ext=".json")
+        with open(path, "r", encoding="utf-8") as f:
+            doc: Any = json.load(f)
+
+        # Backward/forward compatible: accept either a list of messages or
+        # a top-level object containing a `messages` array.
+        if isinstance(doc, dict) and isinstance(doc.get("messages"), list):
+            messages: Iterable[Any] = doc.get("messages", [])
+        elif isinstance(doc, list):
+            messages = doc
+        else:
+            raise ValueError("Unrecognized chat history format.")
+
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            content = item.get("content")
+            if role is None or content is None:
+                continue
+            chat_history.append(AgentMessage(_content=content, _role=role))
 
         # return rebuilt history
         return chat_history    
 
     def list_saved_histories(self):
-        return [f for f in os.listdir(self.streamlit_session.history_dir) if f.endswith(".json")]
+        history_dir = self._ensure_history_dir()
+        files = [f for f in os.listdir(history_dir) if f.endswith(".json")]
+        files.sort(
+            key=lambda name: os.path.getmtime(os.path.join(history_dir, name)),
+            reverse=True,
+        )
+        return files
 
     def models_endpoint(self) -> str:
         return f"{self.streamlit_session.api_base_url}/v1/models"

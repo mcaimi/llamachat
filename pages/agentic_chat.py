@@ -277,39 +277,54 @@ with st.sidebar:
         )
 
         if st.button("💾 Save History"):
-            stSession.save_chat_history(
-                save_name, stSession.session_state.agent_messages
-            )
-            st.success(f"Saved to {save_name}")
+            try:
+                saved_path = stSession.save_chat_history(
+                    save_name, stSession.session_state.agent_messages
+                )
+                st.success(f"Saved to {saved_path}")
+            except Exception as e:
+                st.error(f"Save failed: {e}")
 
-        history_files = stSession.list_saved_histories()
+        try:
+            history_files = stSession.list_saved_histories()
+        except Exception as e:
+            history_files = []
+            st.error(f"Could not list histories: {e}")
         selected_file = st.selectbox(
             "📂 Load History", ["-- Select --"] + history_files
         )
         if selected_file != "-- Select --" and st.button("📂 Load"):
-            stSession.session_state.agent_messages = stSession.load_chat_history(
-                selected_file
-            )
-            st.success(f"Loaded {selected_file}")
-
-        if os.path.exists(
-            os.path.join(
-                stSession.session_state.history_dir,
-                stSession.session_state.latest_history_filename,
-            )
-        ):
-            if st.button("🕓 Load Latest Chat"):
+            try:
                 stSession.session_state.agent_messages = stSession.load_chat_history(
-                    stSession.session_state.latest_history_filename
+                    selected_file
                 )
-                st.success("Latest chat loaded!")
+                st.success(f"Loaded {selected_file}")
+            except Exception as e:
+                st.error(f"Load failed: {e}")
+
+        latest_candidate_path = os.path.join(
+            stSession.session_state.history_dir,
+            os.path.basename(stSession.session_state.latest_history_filename),
+        )
+        if os.path.exists(latest_candidate_path):
+            if st.button("🕓 Load Latest Chat"):
+                try:
+                    stSession.session_state.agent_messages = stSession.load_chat_history(
+                        stSession.session_state.latest_history_filename
+                    )
+                    st.success("Latest chat loaded!")
+                except Exception as e:
+                    st.error(f"Load latest failed: {e}")
 
         if st.button("📤 Export to Markdown"):
             md_filename = f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
-            stSession.export_chat_to_markdown(
-                md_filename, stSession.session_state.agent_messages
-            )
-            st.success(f"Exported to {md_filename}")
+            try:
+                exported_path = stSession.export_chat_to_markdown(
+                    md_filename, stSession.session_state.agent_messages
+                )
+                st.success(f"Exported to {exported_path}")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
 # inference parameters
 inference_parms = {
@@ -508,7 +523,10 @@ if prompt_raw:
         )
 
         # save latest messages in the last_chat json file on disk
-        stSession.save_chat_history(
-            stSession.session_state.latest_history_filename,
-            stSession.session_state.agent_messages,
-        )
+        try:
+            stSession.save_chat_history(
+                stSession.session_state.latest_history_filename,
+                stSession.session_state.agent_messages,
+            )
+        except Exception as e:
+            st.warning(f"Autosave failed: {e}")
