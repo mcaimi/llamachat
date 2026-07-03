@@ -10,7 +10,6 @@ openai:
   history_dir: "chat_histories"
   latest_history_filename: "latest_chat.json"
   model: "gpt-oss:20b"
-  shield_model: "meta-llama/Llama-Guard-3-1b"
   api_key: "your_api_key"
   stream: True
 

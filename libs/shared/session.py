@@ -5,14 +5,15 @@ import json
 import re
 import tempfile
 from typing import Any, Iterable, Optional
+
 try:
     import requests
-    from datetime import datetime
     from streamlit import warning
     from .utils import build_header
     from .state import AgentMessage
 except Exception as e:
     raise e
+
 
 class Session(object):
     def __init__(self, session_state):
@@ -133,7 +134,7 @@ class Session(object):
             chat_history.append(AgentMessage(_content=content, _role=role))
 
         # return rebuilt history
-        return chat_history    
+        return chat_history
 
     def list_saved_histories(self):
         history_dir = self._ensure_history_dir()
@@ -150,52 +151,54 @@ class Session(object):
     def chat_endpoint(self) -> str:
         return f"{self.streamlit_session.api_base_url}/v1/chat/completions"
 
-    def shields_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/v1/shields"
-
     def providers_endpoint(self) -> str:
         return f"{self.streamlit_session.api_base_url}/v1/providers"
 
     # LIST METHODS
-    def list_providers(self, provider_type: str = "vector_io", timeout: int = 10) -> list:
+    def list_providers(
+        self, provider_type: str = "vector_io", timeout: int = 10
+    ) -> list:
         detected_providers = []
         if provider_type not in ["inference", "vector_io", "agents"]:
             return []
 
         try:
-            resp = requests.get(self.providers_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
+            resp = requests.get(
+                self.providers_endpoint(),
+                timeout=timeout,
+                headers=build_header(self.session_state.api_key),
+            )
 
             if resp.status_code == 200:
-                detected_providers = [m['provider_id'] for m in resp.json().get('data', []) if m['api'] == provider_type]
+                detected_providers = [
+                    m["provider_id"]
+                    for m in resp.json().get("data", [])
+                    if m["api"] == provider_type
+                ]
 
             return detected_providers
         except Exception as e:
             warning("Could not fetch providers.")
-            return None            
+            return None
 
     def list_models(self, model_type: str = "llm", timeout: int = 10) -> list:
         detected_models = []
-        if model_type not in ["llm", "embedding", "shield"]:
+        if model_type not in ["llm", "embedding"]:
             return []
 
         try:
-            if model_type == "shield":
-                resp = requests.get(self.shields_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
-            else:
-                resp = requests.get(self.models_endpoint(), timeout=timeout, headers=build_header(self.session_state.api_key))
+            resp = requests.get(
+                self.models_endpoint(),
+                timeout=timeout,
+                headers=build_header(self.session_state.api_key),
+            )
 
             if resp.status_code == 200:
-                if model_type == "shield":
-                    models = [
-                        {
-                            "id": m['identifier'],
-                            "provider": m["provider_id"],
-                            "model": m['provider_resource_id']
-                        }
-                        for m in resp.json().get('data', []) if m['type'] == model_type
-                    ]
-                else:
-                    models = [m['id'] for m in resp.json().get('data', []) if m['custom_metadata']['model_type'] == model_type]
+                models = [
+                    m["id"]
+                    for m in resp.json().get("data", [])
+                    if m["custom_metadata"]["model_type"] == model_type
+                ]
                 if models:
                     detected_models = models
             return detected_models
