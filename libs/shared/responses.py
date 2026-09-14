@@ -30,45 +30,25 @@ def dict_to_markdown_table(data):
     return markdown_table
 
 def format_mcp_response(mcp_call):
-    """
-    Print MCP call in a nicely formatted way.
+    import json
 
-    Args:
-        mcp_call (object): MCP call object containing name, server_label, id, arguments,
-            error, and output.
-    """
+    info = f"| Field | Value |\n| ---|--- |\n"
+    info += f"| **Tool** | `{mcp_call.name}` |\n"
+    info += f"| **Server** | `{mcp_call.server_label}` |\n"
+    info += f"| **ID** | `{mcp_call.id}` |\n"
+    info += f"| **Arguments** | `{mcp_call.arguments}` |\n"
+    if mcp_call.error:
+        info += f"| **Error** | `{mcp_call.error}` |\n"
 
-    # preformat mcp call stack
-    mcp_call_response = dict_to_markdown_table(
-        {
-            "name": mcp_call.name,
-            "id": mcp_call.id,
-            "arguments": mcp_call.arguments,
-            "server_label": mcp_call.server_label,
-            "error": mcp_call.error,
-        }
-    )
-    
-    # Examine output
+    output_data = None
     if mcp_call.output:
         try:
-            import json
-
-            # Attempt to parse the JSON output of the MCP tool call
-            parsed_output = json.loads(mcp_call.output)
-
-            # Pretty-print the parsed JSON output
-            mcp_call_response += dict_to_markdown_table(
-                {
-                    "output": parsed_output
-                }
-            )
+            parsed = json.loads(mcp_call.output)
+            output_data = {"label": mcp_call.name, "content": json.dumps(parsed, indent=2)}
         except json.JSONDecodeError:
-            # If not valid JSON, print the raw output as-is
-            print(f"   {mcp_call.output}")
+            output_data = {"label": mcp_call.name, "content": mcp_call.output}
 
-    # return mcp call stack
-    return mcp_call_response
+    return info, output_data
 
 def format_mcp_list_tools(mcp_list_tools):
     """
@@ -117,21 +97,11 @@ def format_mcp_list_tools(mcp_list_tools):
     # return list
     return tool_list_response
 
-def format_response(response) -> (str, str):
-    """
-    Function to format the response from the OpenAI API.
-
-    Returns:
-        tuple: A tuple containing two strings, the formatted output and the tool call response.
-    """
-
-    # Initialize variables to store the formatted output and tool call response
+def format_response(response) -> (str, str, list):
     output_response = ""
     tool_call_response = ""
-    tool_list_response = ""
+    tool_outputs = []
 
-    # Prepare the tool call response string with relevant information
-    # Use f-string formatting for cleaner code
     tool_call_response = dict_to_markdown_table(
         {
             "ID": response.id,
@@ -143,56 +113,60 @@ def format_response(response) -> (str, str):
             "Total Tokens": f":grey-badge[{response.usage.total_tokens}]",
         }
     )
-    
-    # Iterate over each output item in the response
+
     for i, output_item in enumerate(response.output):
-        match output_item.type:          
+        match output_item.type:
             case "text" | "message":
-                # Append text content to the output_response string
                 content = output_item.content[0]
-                # determine message type
                 match content.type:
                     case "output_text":
                         output_response += f"{content.text}"
                     case "refusal":
                         output_response += f"{content.refusal}"
             case "file_search_call":
-                # Extract relevant information from the file search call
-                tool_call_response += f"### Msg Type: {output_item.type} - Tool Call ID: {output_item.id}, Tool Status: {output_item.status}\n"
-                tool_call_response += f"### Queries: {', '.join(output_item.queries)}\n"
-                # Append results to the output_response string if available
-                tool_call_response += f"###  Results: {output_item.results if output_item.results else 'None'}"
-            case "mcp_list_tools":
-                # Call function to print MCP list tools
-                tool_list_response += format_mcp_list_tools(output_item)
+                tool_call_response += f"| Field | Value |\n| ---|--- |\n"
+                tool_call_response += f"| **Type** | `file_search` |\n"
+                tool_call_response += f"| **ID** | `{output_item.id}` |\n"
+                tool_call_response += f"| **Status** | `{output_item.status}` |\n"
+                tool_call_response += f"| **Queries** | `{', '.join(output_item.queries)}` |\n"
+                if output_item.results:
+                    tool_outputs.append({"label": f"file_search:{output_item.id}", "content": str(output_item.results)})
             case "mcp_call":
-                # Call function to print MCP call
-                tool_call_response += format_mcp_response(output_item)
+                info, output_data = format_mcp_response(output_item)
+                tool_call_response += info
+                if output_data:
+                    tool_outputs.append(output_data)
             case _:
-                # Append generic response content to the output_response string
                 output_response += f"Response content: {output_item.content}"
 
-    return output_response, tool_call_response
+    return output_response, tool_call_response, tool_outputs
 
 
-def format_streaming_response(response) -> (str, str):
-    """
-    Function to format the response from the OpenAI API in streaming mode.
-
-    Returns:
-        tuple: A tuple containing two strings, the incremental formatted output and the eventual tool call response.
-    """
-
+def format_streaming_response(response) -> (str, str, dict | None):
     streaming_text_fragment = ""
     response_callstack = ""
+    tool_output = None
 
     match (response.type):
         case "response.output_text.delta":
             streaming_text_fragment = f"{response.delta}"
+        case "response.output_item.done":
+            item = response.item
+            match item.type:
+                case "mcp_call":
+                    info, tool_output = format_mcp_response(item)
+                    response_callstack = info
+                case "file_search_call":
+                    response_callstack += f"| Field | Value |\n| ---|--- |\n"
+                    response_callstack += f"| **Type** | `file_search` |\n"
+                    response_callstack += f"| **ID** | `{item.id}` |\n"
+                    response_callstack += f"| **Status** | `{item.status}` |\n"
+                    response_callstack += f"| **Queries** | `{', '.join(item.queries)}` |\n"
+                    if item.results:
+                        tool_output = {"label": f"file_search:{item.id}", "content": str(item.results)}
         case "response.in_progress"|"response.created":
             pass
         case "response.completed":
-            # format callstack fragment
             response_callstack = dict_to_markdown_table(
                 {
                     "ID": response.response.id,
@@ -207,4 +181,4 @@ def format_streaming_response(response) -> (str, str):
         case _:
             pass
 
-    return streaming_text_fragment, response_callstack
+    return streaming_text_fragment, response_callstack, tool_output

@@ -7,9 +7,7 @@ import tempfile
 from typing import Any, Iterable, Optional
 
 try:
-    import requests
     from streamlit import warning
-    from .utils import build_header
     from .state import AgentMessage
 except Exception as e:
     raise e
@@ -144,67 +142,6 @@ class Session(object):
             reverse=True,
         )
         return files
-
-    def models_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/v1/models"
-
-    def chat_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/v1/chat/completions"
-
-    def providers_endpoint(self) -> str:
-        return f"{self.streamlit_session.api_base_url}/v1/providers"
-
-    # LIST METHODS
-    def list_providers(
-        self, provider_type: str = "vector_io", timeout: int = 10
-    ) -> list:
-        detected_providers = []
-        if provider_type not in ["inference", "vector_io", "agents"]:
-            return []
-
-        try:
-            resp = requests.get(
-                self.providers_endpoint(),
-                timeout=timeout,
-                headers=build_header(self.session_state.api_key),
-            )
-
-            if resp.status_code == 200:
-                detected_providers = [
-                    m["provider_id"]
-                    for m in resp.json().get("data", [])
-                    if m["api"] == provider_type
-                ]
-
-            return detected_providers
-        except Exception as e:
-            warning("Could not fetch providers.")
-            return None
-
-    def list_models(self, model_type: str = "llm", timeout: int = 10) -> list:
-        detected_models = []
-        if model_type not in ["llm", "embedding"]:
-            return []
-
-        try:
-            resp = requests.get(
-                self.models_endpoint(),
-                timeout=timeout,
-                headers=build_header(self.session_state.api_key),
-            )
-
-            if resp.status_code == 200:
-                models = [
-                    m["id"]
-                    for m in resp.json().get("data", [])
-                    if m["custom_metadata"]["model_type"] == model_type
-                ]
-                if models:
-                    detected_models = models
-            return detected_models
-        except Exception:
-            warning("Could not fetch models. Using fallback.")
-            return None
 
     def add_to_session_state(self, key, value) -> None:
         if key not in self.streamlit_session:
