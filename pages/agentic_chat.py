@@ -19,7 +19,6 @@ try:
         from libs.shared.session import Session
         from libs.shared.agent import Agent
         from libs.shared.state import AgentMessage
-        from libs.shared.connectors_wrapper import ConnectorsAPI, ToolsAPI
         from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
@@ -85,8 +84,6 @@ st.html("assets/header.html")
 
 # instantiate ogx connection
 chatClient = OgxClient(base_url=stSession.session_state.api_base_url)
-connectorsClient = ConnectorsAPI(url=stSession.session_state.api_base_url)
-toolsClient = ToolsAPI(url=stSession.session_state.api_base_url)
 
 # Sidebar
 with st.sidebar:
@@ -97,7 +94,13 @@ with st.sidebar:
     st.header("🛠 LLM Control Panel")
 
     with st.expander("🛠 Settings"):
-        model_list = stSession.list_models(model_type="llm")
+        try:
+            model_list = [
+                m.id for m in chatClient.models.list()
+                if m.custom_metadata and m.custom_metadata.get("model_type") == "llm"
+            ]
+        except Exception:
+            model_list = []
         stSession.session_state.model_name = st.selectbox(
             label="Available models", options=model_list, on_change=reset_agent
         )
@@ -190,9 +193,7 @@ with st.sidebar:
         # if mode is Agent...
         if agent_mode == "agent":
             st.markdown("**🔌 Agentic Workflow Capabilities**")
-            # get a list of tools
-            tools = toolsClient.list()
-            connectors = connectorsClient.list()
+            connectors = chatClient.connectors.connectors_v1alpha_admin_connectors_get()
 
             # build list of available MCP endpoints
             mcp_tools_list = [
@@ -250,16 +251,19 @@ with st.sidebar:
                     ]
                 )
 
-            # display active tools
-            active_tool_list = [f"{t.toolgroup_id}:{t.name}" for t in tools]
-            for tool_entity in toolgroup_selection:
-                match tool_entity.get("type"):
-                    case "mcp":
-                        active_tool_list.extend(
-                            [
-                                f"{tool_entity.get('type')}:{tool_entity.get('server_label')}"
-                            ]
+            # discover tools from selected connectors
+            active_tool_list = []
+            for connector in mcp_tools_list:
+                if connector.server_label in mcp_selection:
+                    try:
+                        connector_tools = chatClient.connectors.connector_tools_v1alpha_admin_connectors_connector_id_tools_get(
+                            connector_id=connector.connector_id
                         )
+                        active_tool_list.extend(
+                            [f"{connector.server_label}:{t.name}" for t in connector_tools]
+                        )
+                    except Exception:
+                        active_tool_list.append(f"mcp:{connector.server_label}")
 
             with st.expander("🛠 AI Tool Info...", expanded=False):
                 st.subheader(f"Active Tools: {len(active_tool_list)}")
@@ -446,42 +450,41 @@ if prompt_raw:
             )
 
             message_placeholder = st.empty()
-            # chat with the ai agent
             if not stream:
                 with st.spinner("🧠Thinking...."):
                     response = chatAgent.create_turn(
                         prompt=augmented_prompt, stream=stream
                     )
 
-                # parse responses
-                prompt_response, tool_response = format_response(response)
-
+                prompt_response, tool_response, tool_outputs = format_response(response)
                 message_placeholder.markdown(prompt_response)
 
                 with st.expander("Inference Stack"):
-                    callstack_placeholder = st.empty()
-                    callstack_placeholder.markdown(tool_response)
+                    st.markdown(tool_response)
+                    for output in tool_outputs:
+                        with st.expander(f"Output: {output['label']}"):
+                            st.code(output["content"])
             else:
                 prompt_response: str = ""
                 callstack_response: str = ""
+                tool_outputs: list = []
                 for item in chatAgent.create_turn(
                     prompt=augmented_prompt, stream=stream
                 ):
-                    stream_fragment, callstack_fragment = format_streaming_response(
-                        item
-                    )
+                    stream_fragment, callstack_fragment, tool_output = format_streaming_response(item)
 
-                    # update generated message
                     prompt_response += stream_fragment
                     callstack_response += callstack_fragment
+                    if tool_output:
+                        tool_outputs.append(tool_output)
 
-                    # display progressive steaming message
                     message_placeholder.markdown(prompt_response)
 
-                # display callstack
                 with st.expander("Inference Stack"):
-                    callstack_placeholder = st.empty()
-                    callstack_placeholder.markdown(callstack_response)
+                    st.markdown(callstack_response)
+                    for output in tool_outputs:
+                        with st.expander(f"Output: {output['label']}"):
+                            st.code(output["content"])
 
         except Exception as e:
             st.error(f"Request failed: {e}")
