@@ -11,7 +11,7 @@ dependencies = [
   "kokoro>=0.9.4",
   "matplotlib>=3.10.5",
   "numpy>=2.3.2",
-  "ogx-client==0.8.0",
+  "ogx-client==1.4.0",
   "pdfplumber>=0.11.7",
   "python-dotenv>=1.1.1",
   "streamlit>=1.48.0",
