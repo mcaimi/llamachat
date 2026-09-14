@@ -13,9 +13,12 @@ def registerVectorCollection(
     embeddingDim: int,
     providerId: str,
 ) -> None:
-    # call LlamaStack
     embedClient.vector_stores.create(
         name=vectorDbId,
+        metadata={
+            "embedding_model": embeddingModel,
+            "embedding_dimension": embeddingDim,
+        },
         extra_body={
             "embedding_model": embeddingModel,
             "embedding_dimension": embeddingDim,
@@ -25,7 +28,7 @@ def registerVectorCollection(
 
 # get vdb id by name
 def getVdbIdByName(embedClient: OgxClient, vdb_name: str) -> str:
-    dbs: list = [v.id for v in embedClient.vector_stores.list().data if v.name == vdb_name]
+    dbs: list = [v.id for v in embedClient.vector_stores.list() if v.name == vdb_name]
 
     # check...
     if len(dbs) > 1:
@@ -38,14 +41,21 @@ def computeEmbeddings(embedClient: OgxClient, inputList: list, vdb_name: str):
     if len(inputList) == 0:
         return []
 
-    vector_db = [v for v in embedClient.vector_stores.list().data if v.name == vdb_name]
+    vector_db = [v for v in embedClient.vector_stores.list() if v.name == vdb_name]
     output_list = []
 
     if len(vector_db) > 1:
         raise Exception(f"{vdb_name} is declared in multiple entries")
     else:
-        embedding_model = vector_db[0].metadata.get("embedding_model")
-        embedding_dimension = vector_db[0].metadata.get("embedding_dimension")
+        vdb_metadata = vector_db[0].metadata or {}
+        embedding_model = vdb_metadata.get("embedding_model")
+        embedding_dimension = vdb_metadata.get("embedding_dimension")
+
+    if not embedding_model:
+        raise Exception(
+            f"Vector store '{vdb_name}' has no embedding_model in metadata. "
+            "Re-create the collection to fix this."
+        )
 
     # compute embeddings
     for item in inputList:

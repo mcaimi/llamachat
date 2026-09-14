@@ -59,9 +59,16 @@ if uploaded_files:
             )
 
             # embedding model
+            try:
+                embedding_models = [
+                    m.id for m in embedClient.models.list()
+                    if m.custom_metadata and m.custom_metadata.get("model_type") == "embedding"
+                ]
+            except Exception:
+                embedding_models = []
             embedding_model_name = st.selectbox(
                 label="Available embedding models",
-                options=stSession.list_models(model_type="embedding"),
+                options=embedding_models,
             )
 
             # docling conversion options
@@ -150,8 +157,8 @@ if uploaded_files:
         # create new collection if necessary
         vector_dbs = embedClient.vector_stores.list() or []
 
-        if len(vector_dbs.data) == 0 or vdb_name not in [
-            v.name for v in vector_dbs.data
+        if len(vector_dbs) == 0 or vdb_name not in [
+            v.name for v in vector_dbs
         ]:
             # create vector db on provider
             st.markdown(f"**Creating new Collection {vdb_name} on the vdb...**")

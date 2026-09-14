@@ -88,9 +88,9 @@ def chunkFiles(converted_docs: list) -> list:
                 # fill metadata
                 metadata = {
                     "name": chunk.meta.origin.filename,
-                    "uri": chunk.meta.origin.uri,
-                    "headings": chunk.meta.headings,
-                    "captions": chunk.meta.captions,
+                    "uri": chunk.meta.origin.uri or chunk.meta.origin.filename or "",
+                    "headings": " > ".join(chunk.meta.headings) if chunk.meta.headings else "",
+                    "captions": ", ".join(chunk.meta.captions) if chunk.meta.captions else "",
                     "mimetype": chunk.meta.origin.mimetype,
                     "document_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}",
                     "chunk_id": f"{chunk.meta.origin.filename}_{chunk.meta.origin.binary_hash}_chunk_{i}",
