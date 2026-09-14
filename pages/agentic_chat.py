@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 #
 # Agentic Chat. Use ogx agentic framework to chat with an AI model,
-# with optional features such as tools, shields and rag.
+# with optional features such as tools, and rag.
 # Streamlit version + ogx backend
 #
 
 import os
 import base64
 from datetime import datetime
-import uuid
 
 try:
     import streamlit as st
@@ -18,9 +17,8 @@ try:
         # local imports
         from libs.shared.settings import Properties
         from libs.shared.session import Session
-        from libs.shared.agent import Agent, AgentSession
+        from libs.shared.agent import Agent
         from libs.shared.state import AgentMessage
-        from libs.shared.connectors_wrapper import Entity, ConnectorsAPI, ToolsAPI
         from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
 except Exception as e:
@@ -59,14 +57,17 @@ stSession.add_to_session_state("agent_messages", [])
 # session config
 stSession.add_to_session_state("model_name", appSettings.config_parameters.openai.model)
 stSession.add_to_session_state(
-    "shield_model_name", appSettings.config_parameters.openai.shield_model
-)
-stSession.add_to_session_state(
     "temperature", appSettings.config_parameters.llm.temperature
 )
-stSession.add_to_session_state("max_infer_iters", appSettings.config_parameters.llm.max_infer_iters)
-stSession.add_to_session_state("max_tool_calls", appSettings.config_parameters.llm.max_tool_calls)
-stSession.add_to_session_state("parallel_tool_calls", appSettings.config_parameters.llm.parallel_tool_calls)
+stSession.add_to_session_state(
+    "max_infer_iters", appSettings.config_parameters.llm.max_infer_iters
+)
+stSession.add_to_session_state(
+    "max_tool_calls", appSettings.config_parameters.llm.max_tool_calls
+)
+stSession.add_to_session_state(
+    "parallel_tool_calls", appSettings.config_parameters.llm.parallel_tool_calls
+)
 stSession.add_to_session_state(
     "max_output_tokens", appSettings.config_parameters.llm.max_output_tokens
 )
@@ -83,8 +84,6 @@ st.html("assets/header.html")
 
 # instantiate ogx connection
 chatClient = OgxClient(base_url=stSession.session_state.api_base_url)
-connectorsClient = ConnectorsAPI(url=stSession.session_state.api_base_url)
-toolsClient = ToolsAPI(url=stSession.session_state.api_base_url)
 
 # Sidebar
 with st.sidebar:
@@ -95,7 +94,13 @@ with st.sidebar:
     st.header("🛠 LLM Control Panel")
 
     with st.expander("🛠 Settings"):
-        model_list = stSession.list_models(model_type="llm")
+        try:
+            model_list = [
+                m.id for m in chatClient.models.list()
+                if m.custom_metadata and m.custom_metadata.get("model_type") == "llm"
+            ]
+        except Exception:
+            model_list = []
         stSession.session_state.model_name = st.selectbox(
             label="Available models", options=model_list, on_change=reset_agent
         )
@@ -117,7 +122,9 @@ with st.sidebar:
             case "**Agentic**":
                 agent_mode = "agent"
 
-        stream = st.checkbox(label="Stream Responses", value=stSession.session_state.stream)
+        stream = st.checkbox(
+            label="Stream Responses", value=stSession.session_state.stream
+        )
 
     with st.expander("System Prompt"):
         new_prompt = st.text_area(
@@ -142,7 +149,7 @@ with st.sidebar:
         )
         stSession.session_state.max_output_tokens = st.number_input(
             "🔁 Tokens",
-            min_value = 16,
+            min_value=16,
             value=appSettings.config_parameters.llm.max_output_tokens,
             on_change=reset_agent,
         )
@@ -183,31 +190,15 @@ with st.sidebar:
 
     st.divider()
     with st.expander("🛠 Advanced"):
-        st.markdown("**Shields**")
-        shield_models = stSession.list_models(model_type="shield")
-
-        # select input shields
-        in_shield_objects = st.multiselect(
-            label="Input Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
-        )
-        input_shields = [m['model'] for m in shield_models if m['id'] in in_shield_objects]
-
-        # select output shields
-        out_shield_objects = st.multiselect(
-            label="Output Shields", options=[m['id'] for m in shield_models], on_change=reset_agent
-        )
-        output_shields = [m['model'] for m in shield_models if m['id'] in out_shield_objects]
-
-
         # if mode is Agent...
         if agent_mode == "agent":
             st.markdown("**🔌 Agentic Workflow Capabilities**")
-            # get a list of tools
-            tools = toolsClient.list()
-            connectors = connectorsClient.list()
+            connectors = chatClient.connectors.connectors_v1alpha_admin_connectors_get()
 
             # build list of available MCP endpoints
-            mcp_tools_list = [tool for tool in connectors if tool.connector_id.startswith("mcp::")]
+            mcp_tools_list = [
+                tool for tool in connectors if tool.connector_id.startswith("mcp::")
+            ]
 
             # MCP Servers comes first now
             st.subheader("MCP Servers")
@@ -221,53 +212,65 @@ with st.sidebar:
 
             # Final combined selection
             toolgroup_selection = []
-            toolgroup_selection.extend([
-                {
-                    "type": "mcp",
-                    "server_url": tool.url,
-                    "server_label": tool.server_label,
-                }
-                for tool in mcp_tools_list if tool.server_label in mcp_selection
-            ])
+            toolgroup_selection.extend(
+                [
+                    {
+                        "type": "mcp",
+                        "server_url": tool.url,
+                        "server_label": tool.server_label,
+                    }
+                    for tool in mcp_tools_list
+                    if tool.server_label in mcp_selection
+                ]
+            )
 
             # rag capability
-            enable_rag = st.checkbox(
-                "Enable RAG",
-                value=False,
-                on_change=reset_agent
-            )
+            enable_rag = st.checkbox("Enable RAG", value=False, on_change=reset_agent)
 
             # display available vector ids
             vector_ids = st.multiselect(
                 "Select Vector Databases",
-                options=[vector_db.name for vector_db in chatClient.vector_stores.list()],
-                disabled=not enable_rag
+                options=[
+                    vector_db.name for vector_db in chatClient.vector_stores.list()
+                ],
+                disabled=not enable_rag,
             )
 
             if enable_rag:
-                toolgroup_selection.extend([{
-                        "type": "file_search",
-                        "vector_store_ids": [v.id for v in chatClient.vector_stores.list() if v.name in vector_ids] or [],
-                    }]
+                toolgroup_selection.extend(
+                    [
+                        {
+                            "type": "file_search",
+                            "vector_store_ids": [
+                                v.id
+                                for v in chatClient.vector_stores.list()
+                                if v.name in vector_ids
+                            ]
+                            or [],
+                        }
+                    ]
                 )
 
-            # display active tools
-            active_tool_list = [f"{t.toolgroup_id}:{t.name}" for t in tools]
-            for tool_entity in toolgroup_selection:
-                match tool_entity.get("type"):
-                    case "mcp":
-                        active_tool_list.extend(
-                            [
-                                f"{tool_entity.get('type')}:{tool_entity.get('server_label')}"
-                            ]
+            # discover tools from selected connectors
+            active_tool_list = []
+            for connector in mcp_tools_list:
+                if connector.server_label in mcp_selection:
+                    try:
+                        connector_tools = chatClient.connectors.connector_tools_v1alpha_admin_connectors_connector_id_tools_get(
+                            connector_id=connector.connector_id
                         )
+                        active_tool_list.extend(
+                            [f"{connector.server_label}:{t.name}" for t in connector_tools]
+                        )
+                    except Exception:
+                        active_tool_list.append(f"mcp:{connector.server_label}")
 
             with st.expander("🛠 AI Tool Info...", expanded=False):
                 st.subheader(f"Active Tools: {len(active_tool_list)}")
                 st.json(active_tool_list)
         else:
+            st.markdown("Agentic Features Disabled.")
             toolgroup_selection = None
-
 
     st.divider()
     with st.expander("💾 Save Chat Log..."):
@@ -309,8 +312,10 @@ with st.sidebar:
         if os.path.exists(latest_candidate_path):
             if st.button("🕓 Load Latest Chat"):
                 try:
-                    stSession.session_state.agent_messages = stSession.load_chat_history(
-                        stSession.session_state.latest_history_filename
+                    stSession.session_state.agent_messages = (
+                        stSession.load_chat_history(
+                            stSession.session_state.latest_history_filename
+                        )
                     )
                     st.success("Latest chat loaded!")
                 except Exception as e:
@@ -328,7 +333,7 @@ with st.sidebar:
 
 # inference parameters
 inference_parms = {
-    #"max_output_tokens": int(stSession.session_state.max_output_tokens),
+    # "max_output_tokens": int(stSession.session_state.max_output_tokens),
     "temperature": float(stSession.session_state.temperature),
     "timeout": int(stSession.session_state.timeout),
     "max_infer_iters": int(stSession.session_state.max_infer_iters),
@@ -336,46 +341,37 @@ inference_parms = {
     "parallel_tool_calls": bool(stSession.session_state.parallel_tool_calls),
 }
 
+
 # Define Agent for AI Interaction
 @st.cache_resource
-def instantiate_ai_agent(_client,
-                        model_name,
-                        instructions,
-                        tools,
-                        parameters,
-                        input_shields,
-                        output_shields,
-                        inferenceParms):
+def instantiate_ai_agent(
+    _client, model_name, instructions, tools, parameters, inferenceParms
+):
     match agent_mode:
         case "chat":
             return Agent(
-                ogx_client = _client,
-                model = model_name,
-                instructions = f"""{instructions}.""",
-                input_shields=input_shields,
-                output_shields=output_shields,
+                ogx_client=_client,
+                model=model_name,
+                instructions=f"""{instructions}.""",
                 sampling_params=inferenceParms,
             )
         case "agent":
             return Agent(
-                ogx_client = _client,
-                model = model_name,
-                instructions = f"""{instructions}. You have tools available that you can use to respond to the user.""",
+                ogx_client=_client,
+                model=model_name,
+                instructions=f"""{instructions}. You have tools available that you can use to respond to the user.""",
                 tools=tools,
-                input_shields=input_shields,
-                output_shields=output_shields,
                 sampling_params=inferenceParms,
             )
 
+
 chatAgent = instantiate_ai_agent(
-    _client = chatClient,
-    model_name = stSession.session_state.model_name,
-    instructions = stSession.session_state.system_prompt,
-    tools = toolgroup_selection,
-    parameters = inference_parms,
-    input_shields=input_shields,
-    output_shields=output_shields,
-    inferenceParms=inference_parms
+    _client=chatClient,
+    model_name=stSession.session_state.model_name,
+    instructions=stSession.session_state.system_prompt,
+    tools=toolgroup_selection,
+    parameters=inference_parms,
+    inferenceParms=inference_parms,
 )
 
 # Chat Interface
@@ -424,13 +420,9 @@ if prompt_raw:
                         }
 
                         # update prompt:
-                        augmented_prompt = [{
-                            "role": "user",
-                            "content": [
-                                txt_entity,
-                                img_entity
-                            ]
-                        }]
+                        augmented_prompt = [
+                            {"role": "user", "content": [txt_entity, img_entity]}
+                        ]
                     else:
                         with st.spinner(f"🧠 Creating Docling Converter.... {f.name}"):
                             # instantiate converter
@@ -457,69 +449,49 @@ if prompt_raw:
                 AgentMessage(_content=prompt, _role="user")
             )
 
-            # run input shield...
-            with st.spinner("Running Input Shield..."):
-                flagged, output = chatAgent.input_shield(augmented_prompt)
+            message_placeholder = st.empty()
+            if not stream:
+                with st.spinner("🧠Thinking...."):
+                    response = chatAgent.create_turn(
+                        prompt=augmented_prompt, stream=stream
+                    )
 
-            if not flagged:
-                message_placeholder = st.empty()
-                # chat with the ai agent
-                if (not stream):
-                    with st.spinner("🧠Thinking...."):
-                        response = chatAgent.create_turn(
-                            prompt=augmented_prompt,
-                            stream=stream
-                        )
-
-                    # parse responses
-                    prompt_response, tool_response = format_response(response)
-
-                    # perform output shielding...
-                    with st.spinner("Running Output Shield..."):
-                        flagged, output = chatAgent.output_shield(prompt_response)
-
-                    if flagged:
-                        # filter response
-                        prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
-                    
-                    message_placeholder.markdown(prompt_response)    
-                    
-                    with st.expander("Inference Stack"):
-                        callstack_placeholder = st.empty()
-                        callstack_placeholder.markdown(tool_response)
-                else:
-                    prompt_response: str = ""
-                    callstack_response: str = ""
-                    for item in chatAgent.create_turn(
-                            prompt=augmented_prompt,
-                            stream=stream
-                        ):
-                        stream_fragment, callstack_fragment = format_streaming_response(item)
-
-                        # update generated message
-                        prompt_response += stream_fragment
-                        callstack_response += callstack_fragment
-
-                        # display progressive steaming message
-                        message_placeholder.markdown(prompt_response)
-                    
-                    # display callstack
-                    with st.expander("Inference Stack"):
-                        callstack_placeholder = st.empty()
-                        callstack_placeholder.markdown(callstack_response)
-            else:
-                prompt_response = f"Shield Active: {output.str()}. Cannot perform inference."
-                message_placeholder = st.empty()
+                prompt_response, tool_response, tool_outputs = format_response(response)
                 message_placeholder.markdown(prompt_response)
-            
+
+                with st.expander("Inference Stack"):
+                    st.markdown(tool_response)
+                    for output in tool_outputs:
+                        with st.expander(f"Output: {output['label']}"):
+                            st.code(output["content"])
+            else:
+                prompt_response: str = ""
+                callstack_response: str = ""
+                tool_outputs: list = []
+                for item in chatAgent.create_turn(
+                    prompt=augmented_prompt, stream=stream
+                ):
+                    stream_fragment, callstack_fragment, tool_output = format_streaming_response(item)
+
+                    prompt_response += stream_fragment
+                    callstack_response += callstack_fragment
+                    if tool_output:
+                        tool_outputs.append(tool_output)
+
+                    message_placeholder.markdown(prompt_response)
+
+                with st.expander("Inference Stack"):
+                    st.markdown(callstack_response)
+                    for output in tool_outputs:
+                        with st.expander(f"Output: {output['label']}"):
+                            st.code(output["content"])
+
         except Exception as e:
             st.error(f"Request failed: {e}")
 
         # add to history
         stSession.session_state.agent_messages.append(
-            AgentMessage(
-                _role="assistant", _content=prompt_response
-            )
+            AgentMessage(_role="assistant", _content=prompt_response)
         )
 
         # save latest messages in the last_chat json file on disk
