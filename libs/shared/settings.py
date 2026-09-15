@@ -40,6 +40,13 @@ class Properties(object):
     def bootup_check(self) -> None:
         os.makedirs(self.config_parameters.openai.history_dir, exist_ok=True)
 
+        for attr in ("agents", "skills"):
+            section = getattr(self.config_parameters, attr, None)
+            if section is None:
+                continue
+            for p in getattr(section, "paths", []):
+                os.makedirs(os.path.expanduser(p), exist_ok=True)
+
     # session variables
     def get_properties_object(self) -> dict:
         return self.config_parameters

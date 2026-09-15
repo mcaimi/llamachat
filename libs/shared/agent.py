@@ -68,6 +68,19 @@ class Agent:
         # agent session object
         self.session = AgentSession(self)
 
+    @classmethod
+    def from_definition(cls, ogx_client, definition, tools=None, fallback_model=None):
+        model = definition.preferred_model or fallback_model
+        instructions = definition.to_system_prompt()
+        sampling_params = definition.to_sampling_params()
+        return cls(
+            ogx_client=ogx_client,
+            model=model,
+            instructions=instructions,
+            tools=tools,
+            sampling_params=sampling_params,
+        )
+
     def create_turn(self, prompt, stream=False):
         return self.session.generate(prompt, stream=stream)
 
