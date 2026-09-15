@@ -21,6 +21,12 @@ try:
         from libs.shared.state import AgentMessage
         from libs.shared.responses import format_response, format_streaming_response
         from libs.embeddings.embeddings import *
+        from libs.agents.loader import discover_agents, load_agent_definition
+        from libs.agents.definition import AgentDefinition
+        from libs.skills.loader import discover_skills, activate_skill
+        from libs.agents.tools import (
+            SHELL_TOOL, run_command, extract_function_calls, parse_call_arguments,
+        )
 except Exception as e:
     print(f"Caught fatal exception: {e}")
 
@@ -53,6 +59,9 @@ stSession.add_to_session_state(
 )
 stSession.add_to_session_state("api_key", appSettings.config_parameters.openai.api_key)
 stSession.add_to_session_state("agent_messages", [])
+stSession.add_to_session_state("selected_agent_name", AgentDefinition.NONE_AGENT_NAME)
+stSession.add_to_session_state("active_skills", [])
+stSession.add_to_session_state("pending_tool_execution", None)
 
 # session config
 stSession.add_to_session_state("model_name", appSettings.config_parameters.openai.model)
@@ -73,6 +82,23 @@ stSession.add_to_session_state(
 )
 stSession.add_to_session_state("timeout", appSettings.config_parameters.llm.timeout)
 stSession.add_to_session_state("stream", appSettings.config_parameters.openai.stream)
+
+# discover available agents and skills
+@st.cache_data(ttl=60)
+def _cached_discover_agents(paths_tuple):
+    return discover_agents(list(paths_tuple))
+
+@st.cache_data(ttl=60)
+def _cached_discover_skills(paths_tuple):
+    return discover_skills(list(paths_tuple))
+
+_agent_cfg = getattr(appSettings.config_parameters, "agents", None)
+_agent_paths = _agent_cfg.paths if _agent_cfg and hasattr(_agent_cfg, "paths") else ["~/.config/opencode/agents"]
+_skill_cfg = getattr(appSettings.config_parameters, "skills", None)
+_skill_paths = _skill_cfg.paths if _skill_cfg and hasattr(_skill_cfg, "paths") else ["~/.config/opencode/skills"]
+
+available_agents = _cached_discover_agents(tuple(_agent_paths))
+available_skills = _cached_discover_skills(tuple(_skill_paths))
 
 # build streamlit UI
 st.set_page_config(
@@ -121,6 +147,17 @@ with st.sidebar:
                 agent_mode = "chat"
             case "**Agentic**":
                 agent_mode = "agent"
+
+        if agent_mode == "agent" and available_agents:
+            agent_options = [AgentDefinition.NONE_AGENT_NAME] + [
+                a.name for a in available_agents
+            ]
+            stSession.session_state.selected_agent_name = st.selectbox(
+                label="Agent Profile",
+                options=agent_options,
+                on_change=reset_agent,
+                help="Select a predefined agent profile to override prompt, tools, and parameters.",
+            )
 
         stream = st.checkbox(
             label="Stream Responses", value=stSession.session_state.stream
@@ -183,6 +220,8 @@ with st.sidebar:
     st.markdown(f"**🔌 Current Endpoint:** `{stSession.session_state.api_base_url}`")
     st.markdown(f"**🔌 Current Model:** `{stSession.session_state.model_name}`")
     st.markdown(f"**🔌 Current Mode:** `{agent_mode}`")
+    if agent_mode == "agent":
+        st.markdown(f"**🔌 Current Agent:** `{stSession.session_state.selected_agent_name}`")
 
     if st.button("Reset Agent State"):
         stSession.clear_chat_session()
@@ -251,6 +290,13 @@ with st.sidebar:
                     ]
                 )
 
+            # shell/command execution tool (enabled by default in agent mode)
+            enable_shell = st.checkbox(
+                "Enable Command Execution", value=True, on_change=reset_agent
+            )
+            if enable_shell:
+                toolgroup_selection.append(SHELL_TOOL)
+
             # discover tools from selected connectors
             active_tool_list = []
             for connector in mcp_tools_list:
@@ -271,6 +317,22 @@ with st.sidebar:
         else:
             st.markdown("Agentic Features Disabled.")
             toolgroup_selection = None
+
+    if agent_mode == "agent" and available_skills:
+        st.divider()
+        with st.expander("Skills"):
+            st.markdown("Skills augment the agent's knowledge. Select skills to activate.")
+            skill_selection = st.pills(
+                label="Available Skills",
+                options=[s.name for s in available_skills],
+                default=[],
+                selection_mode="multi",
+                on_change=reset_agent,
+            )
+            stSession.session_state.active_skills = skill_selection or []
+
+            for s in available_skills:
+                st.caption(f"**{s.name}**: {s.description}")
 
     st.divider()
     with st.expander("💾 Save Chat Log..."):
@@ -331,6 +393,91 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Export failed: {e}")
 
+# resolve agent definition overrides
+active_agent_def = None
+if (
+    agent_mode == "agent"
+    and stSession.session_state.selected_agent_name != AgentDefinition.NONE_AGENT_NAME
+):
+    matching = [
+        a
+        for a in available_agents
+        if a.name == stSession.session_state.selected_agent_name
+    ]
+    if matching:
+        active_agent_def = load_agent_definition(matching[0].directory)
+
+        if active_agent_def.model_parameters:
+            params = active_agent_def.model_parameters
+            if "temperature" in params:
+                stSession.session_state.temperature = params["temperature"]
+            if "max_output_tokens" in params:
+                stSession.session_state.max_output_tokens = params["max_output_tokens"]
+            if "max_infer_iters" in params:
+                stSession.session_state.max_infer_iters = params["max_infer_iters"]
+            if "max_tool_calls" in params:
+                stSession.session_state.max_tool_calls = params["max_tool_calls"]
+            if "parallel_tool_calls" in params:
+                stSession.session_state.parallel_tool_calls = params["parallel_tool_calls"]
+            if "timeout" in params:
+                stSession.session_state.timeout = params["timeout"]
+
+        stSession.session_state.system_prompt = active_agent_def.to_system_prompt()
+
+        if active_agent_def.preferred_model and active_agent_def.preferred_model in model_list:
+            stSession.session_state.model_name = active_agent_def.preferred_model
+
+        if active_agent_def.mcp_servers and agent_mode == "agent":
+            available_labels = [t.server_label for t in mcp_tools_list]
+            filtered_labels = [s for s in active_agent_def.mcp_servers if s in available_labels]
+            toolgroup_selection = [
+                {"type": "mcp", "server_url": tool.url, "server_label": tool.server_label}
+                for tool in mcp_tools_list
+                if tool.server_label in filtered_labels
+            ]
+
+        if active_agent_def.rag and active_agent_def.rag.get("enabled"):
+            enable_rag = True
+
+# activate selected skills and augment system prompt
+activated_skill_instructions = []
+for skill_name in stSession.session_state.active_skills:
+    matching_skills = [s for s in available_skills if s.name == skill_name]
+    if matching_skills:
+        skill_def = activate_skill(matching_skills[0].directory)
+        activated_skill_instructions.append(
+            f"## Skill: {skill_def.name}\n\n{skill_def.instructions}"
+        )
+
+if active_agent_def and active_agent_def.skills:
+    for skill_name in active_agent_def.skills:
+        if skill_name not in stSession.session_state.active_skills:
+            matching_skills = [s for s in available_skills if s.name == skill_name]
+            if matching_skills:
+                skill_def = activate_skill(matching_skills[0].directory)
+                activated_skill_instructions.append(
+                    f"## Skill: {skill_def.name}\n\n{skill_def.instructions}"
+                )
+
+effective_instructions = stSession.session_state.system_prompt
+
+if available_skills:
+    skill_catalog = "\n".join(
+        f"- **{s.name}**: {s.description}" for s in available_skills
+    )
+    effective_instructions += (
+        "\n\n---\n\n## Available Skills\n\n"
+        "The following skills are available and can be activated by the user:\n\n"
+        + skill_catalog
+    )
+
+if activated_skill_instructions:
+    effective_instructions += (
+        "\n\n---\n\n## Active Skills\n\n"
+        "The following skills are active. Follow their guidance:\n\n"
+        + "\n\n".join(activated_skill_instructions)
+    )
+
 # inference parameters
 inference_parms = {
     # "max_output_tokens": int(stSession.session_state.max_output_tokens),
@@ -368,11 +515,46 @@ def instantiate_ai_agent(
 chatAgent = instantiate_ai_agent(
     _client=chatClient,
     model_name=stSession.session_state.model_name,
-    instructions=stSession.session_state.system_prompt,
+    instructions=effective_instructions,
     tools=toolgroup_selection,
     parameters=inference_parms,
     inferenceParms=inference_parms,
 )
+
+# -- helper: process a response and check for local function calls --
+def _process_response_for_function_calls(response):
+    """Check response for execute_command calls. Returns (function_calls, text_response, tool_response, tool_outputs)."""
+    function_calls = extract_function_calls(response)
+    local_calls = [fc for fc in function_calls if fc["name"] == "execute_command"]
+    prompt_response, tool_response, tool_outputs = format_response(response)
+    return local_calls, prompt_response, tool_response, tool_outputs
+
+
+def _process_stream_for_function_calls(stream_iter):
+    """Consume a streaming response. Returns (final_response, function_calls, text, callstack, tool_outputs)."""
+    prompt_response = ""
+    callstack_response = ""
+    tool_outputs = []
+    final_response = None
+    message_placeholder = st.empty()
+
+    for item in stream_iter:
+        stream_fragment, callstack_fragment, tool_output = format_streaming_response(item)
+        prompt_response += stream_fragment
+        callstack_response += callstack_fragment
+        if tool_output:
+            tool_outputs.append(tool_output)
+        message_placeholder.markdown(prompt_response)
+        if hasattr(item, "type") and item.type == "response.completed":
+            final_response = item.response
+
+    local_calls = []
+    if final_response:
+        all_calls = extract_function_calls(final_response)
+        local_calls = [fc for fc in all_calls if fc["name"] == "execute_command"]
+
+    return final_response, local_calls, prompt_response, callstack_response, tool_outputs
+
 
 # Chat Interface
 for msg in stSession.session_state.agent_messages:
@@ -380,8 +562,85 @@ for msg in stSession.session_state.agent_messages:
         with st.chat_message(msg.role):
             st.markdown(msg.content, unsafe_allow_html=True)
 
+# -- handle pending tool call approval --
+if stSession.session_state.pending_tool_execution:
+    pending = stSession.session_state.pending_tool_execution
+    with st.chat_message("assistant"):
+        st.warning("**Command execution requested:**")
+        for tc in pending["calls"]:
+            args = parse_call_arguments(tc["arguments"])
+            cwd = args.get("working_directory", "")
+            st.code(args.get("command", ""), language="bash")
+            if cwd:
+                st.caption(f"Working directory: `{cwd}`")
+
+        col1, col2 = st.columns(2)
+        approved = col1.button("Approve", key="approve_exec")
+        denied = col2.button("Deny", key="deny_exec")
+
+        if approved or denied:
+            tool_results = []
+            for tc in pending["calls"]:
+                args = parse_call_arguments(tc["arguments"])
+                if approved:
+                    cmd_output = run_command(
+                        args["command"],
+                        timeout=int(stSession.session_state.timeout),
+                        cwd=args.get("working_directory"),
+                    )
+                    st.code(cmd_output, language="text")
+                else:
+                    cmd_output = "Command execution denied by user."
+                tool_results.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": tc["call_id"],
+                        "output": str(cmd_output),
+                    }
+                )
+
+            stSession.session_state.pending_tool_execution = None
+
+            with st.spinner("Continuing..."):
+                continuation = chatAgent.create_turn(prompt=tool_results, stream=stream)
+
+            if not stream:
+                new_calls, cont_text, cont_tool_resp, cont_tool_outputs = (
+                    _process_response_for_function_calls(continuation)
+                )
+                if cont_text:
+                    st.markdown(cont_text)
+                if new_calls:
+                    stSession.session_state.pending_tool_execution = {
+                        "calls": new_calls,
+                    }
+                    st.rerun()
+                stSession.session_state.agent_messages.append(
+                    AgentMessage(_role="assistant", _content=cont_text)
+                )
+            else:
+                _, new_calls, cont_text, cont_callstack, cont_tool_outputs = (
+                    _process_stream_for_function_calls(continuation)
+                )
+                if new_calls:
+                    stSession.session_state.pending_tool_execution = {
+                        "calls": new_calls,
+                    }
+                    st.rerun()
+                stSession.session_state.agent_messages.append(
+                    AgentMessage(_role="assistant", _content=cont_text)
+                )
+
+            try:
+                stSession.save_chat_history(
+                    stSession.session_state.latest_history_filename,
+                    stSession.session_state.agent_messages,
+                )
+            except Exception as e:
+                st.warning(f"Autosave failed: {e}")
+
 prompt_raw = st.chat_input(
-    placeholder="💬 Say something...",
+    placeholder="Say something...",
     accept_file=True,
     file_type=appSettings.config_parameters.features.supported_img_formats
     + appSettings.config_parameters.features.supported_data_formats,
@@ -393,6 +652,7 @@ if prompt_raw:
 
     # Assistant reply container
     with st.chat_message("assistant"):
+        prompt_response = ""
         # execute inference on chat endpoint
         try:
             augmented_prompt = f"{prompt}."
@@ -424,7 +684,7 @@ if prompt_raw:
                             {"role": "user", "content": [txt_entity, img_entity]}
                         ]
                     else:
-                        with st.spinner(f"🧠 Creating Docling Converter.... {f.name}"):
+                        with st.spinner(f"Creating Docling Converter.... {f.name}"):
                             # instantiate converter
                             converter = createDoclingConverter(
                                 do_ocr=False, do_table_structure=True
@@ -451,12 +711,14 @@ if prompt_raw:
 
             message_placeholder = st.empty()
             if not stream:
-                with st.spinner("🧠Thinking...."):
+                with st.spinner("Thinking...."):
                     response = chatAgent.create_turn(
                         prompt=augmented_prompt, stream=stream
                     )
 
-                prompt_response, tool_response, tool_outputs = format_response(response)
+                local_calls, prompt_response, tool_response, tool_outputs = (
+                    _process_response_for_function_calls(response)
+                )
                 message_placeholder.markdown(prompt_response)
 
                 with st.expander("Inference Stack"):
@@ -464,21 +726,21 @@ if prompt_raw:
                     for output in tool_outputs:
                         with st.expander(f"Output: {output['label']}"):
                             st.code(output["content"])
+
+                if local_calls:
+                    stSession.session_state.pending_tool_execution = {
+                        "calls": local_calls,
+                    }
+                    stSession.session_state.agent_messages.append(
+                        AgentMessage(_role="assistant", _content=prompt_response)
+                    )
+                    st.rerun()
             else:
-                prompt_response: str = ""
-                callstack_response: str = ""
-                tool_outputs: list = []
-                for item in chatAgent.create_turn(
-                    prompt=augmented_prompt, stream=stream
-                ):
-                    stream_fragment, callstack_fragment, tool_output = format_streaming_response(item)
-
-                    prompt_response += stream_fragment
-                    callstack_response += callstack_fragment
-                    if tool_output:
-                        tool_outputs.append(tool_output)
-
-                    message_placeholder.markdown(prompt_response)
+                final_response, local_calls, prompt_response, callstack_response, tool_outputs = (
+                    _process_stream_for_function_calls(
+                        chatAgent.create_turn(prompt=augmented_prompt, stream=stream)
+                    )
+                )
 
                 with st.expander("Inference Stack"):
                     st.markdown(callstack_response)
@@ -486,19 +748,29 @@ if prompt_raw:
                         with st.expander(f"Output: {output['label']}"):
                             st.code(output["content"])
 
+                if local_calls:
+                    stSession.session_state.pending_tool_execution = {
+                        "calls": local_calls,
+                    }
+                    stSession.session_state.agent_messages.append(
+                        AgentMessage(_role="assistant", _content=prompt_response)
+                    )
+                    st.rerun()
+
         except Exception as e:
             st.error(f"Request failed: {e}")
 
         # add to history
-        stSession.session_state.agent_messages.append(
-            AgentMessage(_role="assistant", _content=prompt_response)
-        )
-
-        # save latest messages in the last_chat json file on disk
-        try:
-            stSession.save_chat_history(
-                stSession.session_state.latest_history_filename,
-                stSession.session_state.agent_messages,
+        if prompt_response:
+            stSession.session_state.agent_messages.append(
+                AgentMessage(_role="assistant", _content=prompt_response)
             )
-        except Exception as e:
-            st.warning(f"Autosave failed: {e}")
+
+            # save latest messages in the last_chat json file on disk
+            try:
+                stSession.save_chat_history(
+                    stSession.session_state.latest_history_filename,
+                    stSession.session_state.agent_messages,
+                )
+            except Exception as e:
+                st.warning(f"Autosave failed: {e}")

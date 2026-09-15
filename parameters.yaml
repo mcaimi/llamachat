@@ -49,6 +49,14 @@ features:
   supported_img_formats: ["jpg", "png"]
   supported_audio_formats: ["mp3", "wav"]
 
+agents:
+  paths:
+    - "~/.config/ogx/agents"
+
+skills:
+  paths:
+    - "~/.config/ogx/skills"
+
 llm:
   temperature: 0.8
   timeout: 120
