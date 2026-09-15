@@ -441,27 +441,42 @@ if (
 
 # activate selected skills and augment system prompt
 activated_skill_instructions = []
-for skill_name in stSession.session_state.active_skills:
+activated_skill_defs = []
+all_active_skill_names = set(stSession.session_state.active_skills)
+if active_agent_def and active_agent_def.skills:
+    all_active_skill_names.update(active_agent_def.skills)
+
+for skill_name in all_active_skill_names:
     matching_skills = [s for s in available_skills if s.name == skill_name]
     if matching_skills:
         skill_def = activate_skill(matching_skills[0].directory)
+        activated_skill_defs.append(skill_def)
+        resolved_instructions = skill_def.instructions.replace(
+            "{{SKILL_DIR}}", skill_def.directory
+        )
         activated_skill_instructions.append(
-            f"## Skill: {skill_def.name}\n\n{skill_def.instructions}"
+            f"## Skill: {skill_def.name}\n\n{resolved_instructions}"
         )
 
-if active_agent_def and active_agent_def.skills:
-    for skill_name in active_agent_def.skills:
-        if skill_name not in stSession.session_state.active_skills:
-            matching_skills = [s for s in available_skills if s.name == skill_name]
-            if matching_skills:
-                skill_def = activate_skill(matching_skills[0].directory)
-                activated_skill_instructions.append(
-                    f"## Skill: {skill_def.name}\n\n{skill_def.instructions}"
-                )
+# enforce allowed_tools from active skills
+if agent_mode == "agent" and activated_skill_defs:
+    all_allowed = set()
+    has_restriction = False
+    for skill_def in activated_skill_defs:
+        if skill_def.allowed_tools:
+            has_restriction = True
+            for tool_name in skill_def.allowed_tools.split(","):
+                all_allowed.add(tool_name.strip())
+    if has_restriction and toolgroup_selection:
+        toolgroup_selection = [
+            t for t in toolgroup_selection
+            if (isinstance(t, dict) and t.get("type") in ("mcp", "file_search"))
+            or (isinstance(t, dict) and t.get("name") in all_allowed)
+        ]
 
 effective_instructions = stSession.session_state.system_prompt
 
-if available_skills:
+if agent_mode == "agent" and available_skills:
     skill_catalog = "\n".join(
         f"- **{s.name}**: {s.description}" for s in available_skills
     )
